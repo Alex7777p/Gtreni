@@ -791,7 +791,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "background_color": "#0a0f1e",
                 "theme_color": "#0a0f1e",
                 "orientation": "portrait",
-                "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+                "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]
             }
             body = json.dumps(manifest).encode('utf-8')
             self.send_response(200)
@@ -810,14 +810,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(sw)
 
-        # Icona SVG
-        elif parsed.path == '/icon.svg':
-            svg = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#0a0f1e"/><text x="96" y="135" font-size="120" text-anchor="middle" font-family="Arial" font-weight="bold" fill="#06b6d4">G</text></svg>'
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/svg+xml')
-            self.send_header('Content-Length', len(svg))
-            self.end_headers()
-            self.wfile.write(svg)
+        # Icone PNG
+        elif parsed.path in ('/icon-192.png', '/icon-512.png'):
+            fname = parsed.path[1:]
+            import os
+            fpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), fname)
+            try:
+                with open(fpath, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", len(data))
+                self.end_headers()
+                self.wfile.write(data)
+            except:
+                self.send_response(404)
+                self.end_headers()
 
         # Serve HTML
         elif parsed.path == '/':
