@@ -964,12 +964,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             risultati = diretti_veloci + trovati_fermate
             risultati.sort(key=lambda t: t.get('orarioPartenza') or 0)
 
-            # Se non trovato nulla, prova con arrivi alla stazione dest e filtra per origine
-            if not risultati and p('to'):
-                to_id = p('to')
-                from_nome = p('from-nome').upper().strip()
-                from_kw = [w for w in from_nome.split() if len(w) > 3]
-                arrivi_trovati = []
+            # Strategia 2: arrivi alla stazione di destinazione filtrati per origine
+            # Questo cattura il caso in cui la partenza è una stazione intermedia
+            to_id = p('to')
+            from_nome = p('from-nome').upper().strip()
+            from_kw = [w for w in from_nome.split() if len(w) > 3]
+            arrivi_trovati = []
+            if to_id and from_kw:
                 seen_arr = set()
                 for delta_h in [0, 2, 4]:
                     dt2 = base_dt + timedelta(hours=delta_h)
@@ -984,9 +985,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                     seen_arr.add(key)
                                     arrivi_trovati.append(t)
                 arrivi_trovati.sort(key=lambda t: t.get('orarioArrivo') or 0)
-                send_json(self, arrivi_trovati[:15] if arrivi_trovati else tutti[:15])
+
+            # Unisci le due strategie, preferendo i risultati da partenze
+            numeri_gia_trovati = {t.get('numeroTreno') for t in risultati}
+            for t in arrivi_trovati:
+                if t.get('numeroTreno') not in numeri_gia_trovati:
+                    risultati.append(t)
+
+            risultati.sort(key=lambda t: t.get('orarioPartenza') or t.get('orarioArrivo') or 0)
+
+            if risultati:
+                send_json(self, risultati[:15])
             else:
-                send_json(self, risultati[:15] if risultati else tutti[:15])
+                send_json(self, {'error': 'Nessun treno diretto trovato tra queste stazioni. Usa il tasto Cerca su Trenitalia per soluzioni con cambio.'})
 
         # Stato treno
         elif parsed.path == '/api/treno':
