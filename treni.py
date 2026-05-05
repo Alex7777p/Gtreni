@@ -647,6 +647,7 @@ async function cercaViaggio() {
   try {
     const toNome = document.getElementById('v-to').value.trim();
     const fromNome = document.getElementById('v-from').value.trim();
+    const toDisplay = toNome; // nome stazione arrivo da mostrare
     const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
@@ -674,7 +675,7 @@ async function cercaViaggio() {
             <div class="train-dest">→ ${t.destinazione||'–'}</div>
             <div class="train-sub">
               🕐 Partenza: <b>${fmt(t.orarioPartenza)}</b>
-              ${arrDest ? `&nbsp;→&nbsp;Arrivo: <b>${arrDest}</b>` : ''}
+              ${arrDest ? `&nbsp;→&nbsp;<b>${toNome}</b>: <b>${arrDest}</b>` : ''}
               ${durStr ? `&nbsp;·&nbsp;<span style="color:var(--accent)">${durStr}</span>` : ''}
             </div>
           </div>
@@ -1021,7 +1022,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for f in fermate_list[idx_from:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        t['orarioArrivoDestinazione'] = f.get('programmata') or f.get('effettiva') or f.get('arrivo_teorico')
+                        arr = f.get('arrivo_teorico') or f.get('partenza_teorica') or f.get('programmata')
+                        print(f"[ARR] stazione={f.get('stazione')} arrivo_teorico={f.get('arrivo_teorico')} partenza_teorica={f.get('partenza_teorica')} programmata={f.get('programmata')} effettiva={f.get('effettiva')}", flush=True)
+                        t['orarioArrivoDestinazione'] = arr
                         return t
                 return None
 
