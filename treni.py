@@ -599,43 +599,41 @@ async function cercaViaggio() {
   if (!toId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di arrivo dalla lista</div>'; return; }
   res.innerHTML = '<div class="loading">🔍 Ricerca soluzioni...</div>';
   try {
-    const toNome = document.getElementById('v-to').value.trim();
-    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
+    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
     if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🔍</div>Nessuna soluzione trovata</div>'; return; }
-    // Controlla se ci sono treni diretti verso la destinazione
-    const toNomeCheck = document.getElementById('v-to').value.trim().toUpperCase();
-    const keywords = toNomeCheck.split(' ').filter(w => w.length > 3);
-    const diretti = data.filter(t => {
-      const dest = (t.destinazione || '').toUpperCase();
-      return keywords.some(k => dest.includes(k));
-    });
-
-    if (diretti.length === 0 && toNomeCheck) {
-      // Nessun diretto — apri automaticamente lefrecce.it
-      res.innerHTML = `
-        <div style="background:#1a1a0a;border:1px solid #f59e0b;border-radius:12px;padding:20px 22px;text-align:center">
-          <div style="font-size:2rem;margin-bottom:10px">🔄</div>
-          <div style="font-weight:700;color:#fbbf24;font-size:1.05rem;margin-bottom:8px">Nessun treno diretto per ${toNomeCheck}</div>
-          <div style="color:#94a3b8;font-size:0.88rem;margin-bottom:16px">È necessario almeno un cambio. Sto aprendo lefrecce.it con i dati del tuo viaggio...</div>
-          <button class="btn" onclick="apriTrenitalia(true)" style="background:linear-gradient(135deg,#059669,#0d9488)">🌐 Apri lefrecce.it</button>
-        </div>`;
-      setTimeout(() => apriTrenitalia(true), 3000);
-      return;
-    }
-
+    // Separa diretti da quelli con cambio
+    const diretti = data.filter(t => t.soluzioneType === 'diretto');
+    const conCambio = data.filter(t => t.soluzioneType === 'cambio');
+    const mostraCambio = diretti.length === 0 && conCambio.length > 0;
     const lista = diretti.length > 0 ? diretti : data;
-    res.innerHTML = `<div class="train-list">${lista.map(t => `
-      <div class="train-card">
-        <div class="train-badge">${t.categoria||''} ${t.numeroTreno}</div>
-        <div class="train-info">
-          <div class="train-dest">→ ${t.destinazione||'–'}</div>
-          <div class="train-sub">Partenza: <b>${fmt(t.orarioPartenza)}</b> · Da ${t.origine||'–'}</div>
-        </div>
-        ${delayHtml(t.ritardo)}
-        <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
-      </div>`).join('')}</div>`;
+
+    const htmlTreno = t => {
+      const durStr = t.durataMinuti ? fmtDur(t.durataMinuti) : '';
+      const cambiStr = t.cambi > 0 ? `<span class="cambio-badge">🔄 ${t.cambi} cambio${t.cambi>1?'i':''}</span>` : '<span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>';
+      return `
+        <div class="train-card">
+          <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno||'–'}</div>
+          <div class="train-info">
+            <div class="train-dest">→ ${t.destinazione||'–'}</div>
+            <div class="train-sub">
+              Partenza: <b>${fmt(t.orarioPartenza)}</b>
+              ${t.orarioArrivo ? `· Arrivo: <b>${fmt(t.orarioArrivo)}</b>` : ''}
+              ${durStr ? `· ${durStr}` : ''}
+            </div>
+          </div>
+          ${cambiStr}
+          ${delayHtml(t.ritardo)}
+          <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
+        </div>`;
+    };
+
+    res.innerHTML = `
+      ${diretti.length > 0 ? `<div class="section-label" style="margin-bottom:8px">✅ Treni diretti (${diretti.length})</div>` : ''}
+      <div class="train-list">${lista.map(htmlTreno).join('')}</div>
+      ${mostraCambio ? `<div style="margin-top:6px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.83rem;color:#fbbf24">⚠️ Nessun treno diretto trovato — mostrate soluzioni con cambio</div>` : ''}
+    `;
   } catch(e) {
     res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
   }
@@ -889,40 +887,75 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             send_json(self, data[:25] if isinstance(data, list) else [])
 
-        # Cerca viaggio: usa partenze su più fasce orarie e filtra per destinazione
+        # Cerca viaggio: usa soluzioniViaggioNew per trovare tutti i treni (anche con fermate intermedie)
         elif parsed.path == '/api/viaggio':
             from_id = p('from')
-            to_nome = p('to-nome').upper().strip()
+            to_id = p('to')
             date = p('date') or datetime.now().strftime('%Y-%m-%d')
             time_str = p('time') or datetime.now().strftime('%H:%M')
-            # Interroga 3 fasce orarie: ora richiesta, +2h, +4h
             from datetime import timedelta
             try:
                 base_dt = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
             except:
                 base_dt = datetime.now()
-            tutti = []
-            seen = set()
-            for delta_h in [0, 2, 4]:
-                dt = base_dt + timedelta(hours=delta_h)
-                ora_str = dt.strftime('%H:%M')
-                date_str = dt.strftime('%Y-%m-%d')
-                orario = build_orario(ora_str, date_str)
-                data = api(f'/partenze/{from_id}/{urllib.parse.quote(orario)}')
-                if data and isinstance(data, list):
-                    for t in data:
-                        key = t.get('numeroTreno')
-                        if key and key not in seen:
-                            seen.add(key)
-                            tutti.append(t)
-            # Filtra per destinazione se specificata
-            if to_nome:
-                filtrati = [t for t in tutti if to_nome in (t.get('destinazione') or '').upper()]
-                risultati = filtrati if filtrati else tutti
-            else:
-                risultati = tutti
-            # Ordina per orario partenza
-            risultati.sort(key=lambda t: t.get('orarioPartenza') or 0)
+
+            # Formato timestamp richiesto dall'API: DDMMYYYYHHmm
+            ts = base_dt.strftime('%d%m%Y%H%M')
+
+            # Endpoint ufficiale per soluzioni di viaggio
+            data = api(f'/soluzioniViaggioNew/{from_id}/{to_id}/A/{ts}/A/320/S/0')
+
+            if data is None or not isinstance(data, dict):
+                # Fallback: prova con il vecchio metodo partenze + filtro fermate
+                tutti = []
+                seen = set()
+                for delta_h in [0, 2, 4]:
+                    dt = base_dt + timedelta(hours=delta_h)
+                    orario = build_orario(dt.strftime('%H:%M'), dt.strftime('%Y-%m-%d'))
+                    parz = api(f'/partenze/{from_id}/{urllib.parse.quote(orario)}')
+                    if parz and isinstance(parz, list):
+                        for t in parz:
+                            key = t.get('numeroTreno')
+                            if key and key not in seen:
+                                seen.add(key)
+                                tutti.append(t)
+                tutti.sort(key=lambda t: t.get('orarioPartenza') or 0)
+                send_json(self, tutti[:20])
+                return
+
+            soluzioni = data.get('soluzioni', [])
+            risultati = []
+            for sol in soluzioni:
+                vehicles = sol.get('vehicles', [])
+                if not vehicles:
+                    continue
+                primo = vehicles[0]
+                ultimo = vehicles[-1]
+                cambio = len(vehicles) > 1
+
+                # Calcola durata totale
+                try:
+                    t_part = datetime.fromtimestamp(primo.get('orarioPartenza', 0) / 1000)
+                    t_arr = datetime.fromtimestamp(ultimo.get('orarioArrivo', 0) / 1000)
+                    dur_min = int((t_arr - t_part).total_seconds() / 60)
+                except:
+                    dur_min = None
+
+                risultati.append({
+                    'soluzioneType': 'cambio' if cambio else 'diretto',
+                    'numeroTreno': primo.get('numeroTreno'),
+                    'categoria': primo.get('categoriaDescrizione', ''),
+                    'origine': primo.get('origine', ''),
+                    'destinazione': ultimo.get('destinazione', ''),
+                    'orarioPartenza': primo.get('orarioPartenza'),
+                    'orarioArrivo': ultimo.get('orarioArrivo'),
+                    'durataMinuti': dur_min,
+                    'cambi': len(vehicles) - 1,
+                    'vehicles': vehicles,
+                    'ritardo': primo.get('ritardo'),
+                    'binarioProgrammatoPartenzaDescrizione': primo.get('binarioProgrammatoPartenzaDescrizione', '–'),
+                })
+
             send_json(self, risultati[:20])
 
         # Stato treno
