@@ -1084,7 +1084,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not data or not isinstance(data, dict):
                 send_json(self, {'fermate': []})
                 return
-            send_json(self, {'fermate': data.get('fermate', [])})
+            fermate = data.get('fermate', [])
+            if fermate:
+                print(f"[FIELDS] prima fermata keys: {list(fermate[0].keys())}", flush=True)
+                print(f"[FIELDS] prima fermata: {fermate[0]}", flush=True)
+            send_json(self, {'fermate': fermate})
 
         elif parsed.path == '/api/treno':
             n = p('n')
