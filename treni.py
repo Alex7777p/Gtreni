@@ -1133,14 +1133,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             risultati = diretti_veloci + trovati_fermate
             risultati.sort(key=lambda t: t.get('orarioPartenza') or 0)
 
-            # Strategia 2: arrivi alla stazione di destinazione filtrati per origine
-            # Questo cattura il caso in cui la partenza è una stazione intermedia
+            # Strategia 2: arrivi alla stazione di destinazione
+            # Filtra per origine oppure controlla nelle fermate (per stazioni intermedie)
             to_id = p('to')
             from_nome = p('from-nome').upper().strip()
             from_kw = [w for w in from_nome.split() if len(w) > 3]
             arrivi_trovati = []
             if to_id and from_kw:
                 seen_arr = set()
+                candidati_arrivi = []
                 for delta_h in [0, 2, 4]:
                     dt2 = base_dt + timedelta(hours=delta_h)
                     orario2 = build_orario(dt2.strftime('%H:%M'), dt2.strftime('%Y-%m-%d'))
@@ -1148,12 +1149,58 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if arr and isinstance(arr, list):
                         for t in arr:
                             key = t.get('numeroTreno')
-                            orig = (t.get('origine') or '').upper()
                             if key and key not in seen_arr:
+                                seen_arr.add(key)
+                                orig = (t.get('origine') or '').upper()
+                                # Controllo veloce: origine corrisponde
                                 if any(k in orig for k in from_kw) or from_nome in orig:
-                                    seen_arr.add(key)
                                     arrivi_trovati.append(t)
-                arrivi_trovati.sort(key=lambda t: t.get('orarioArrivo') or 0)
+                                else:
+                                    # Candidato da verificare nelle fermate
+                                    candidati_arrivi.append(t)
+
+                # Strategia 3: per i candidati rimasti, verifica nelle fermate
+                # Questo cattura il caso in cui ENTRAMBE le stazioni sono intermedie
+                numeri_gia = {t.get('numeroTreno') for t in risultati + arrivi_trovati}
+                def check_fermate_arrivo(t):
+                    num = t.get('numeroTreno')
+                    cod = t.get('codOrigine')
+                    ts = t.get('orarioArrivo') or t.get('orarioPartenza')
+                    if not num or not cod or not ts:
+                        return None
+                    ferro = api(f'/andamentoTreno/{cod}/{num}/{ts}')
+                    if not ferro or not isinstance(ferro, dict):
+                        return None
+                    fermate = ferro.get('fermate', [])
+                    stazioni = [(f.get('stazione') or '').upper() for f in fermate]
+                    # Trova indice stazione di partenza
+                    idx_f = -1
+                    for i, nome in enumerate(stazioni):
+                        if any(k in nome for k in from_kw):
+                            idx_f = i
+                            break
+                    if idx_f == -1:
+                        return None
+                    # Verifica che la destinazione venga dopo
+                    for f in fermate[idx_f + 1:]:
+                        nome_f = (f.get('stazione') or '').upper()
+                        if any(k in nome_f for k in keywords):
+                            # Recupera orario partenza dalla stazione from
+                            t['orarioPartenza'] = fermate[idx_f].get('partenza_teorica') or fermate[idx_f].get('programmata')
+                            t['orarioArrivoDestinazione'] = f.get('arrivo_teorico') or f.get('programmata')
+                            return t
+                    return None
+
+                da_verificare = [t for t in candidati_arrivi[:12] if t.get('numeroTreno') not in numeri_gia]
+                if da_verificare:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                        futs = [ex.submit(check_fermate_arrivo, t) for t in da_verificare]
+                        for fut in concurrent.futures.as_completed(futs):
+                            res = fut.result()
+                            if res is not None:
+                                arrivi_trovati.append(res)
+
+                arrivi_trovati.sort(key=lambda t: t.get('orarioPartenza') or t.get('orarioArrivo') or 0)
 
             # Per i treni trovati via arrivi, recupera destinazione e orario partenza
             def arricchisci_arrivo(t):
