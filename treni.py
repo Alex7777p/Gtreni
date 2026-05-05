@@ -977,19 +977,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not fermate_list:
                     return None
                 stazioni = [(f.get('stazione') or '').upper() for f in fermate_list]
-                orig_upper = (t.get('origine') or '').upper()
-                orig_kw = [w for w in orig_upper.split() if len(w) > 3]
-                # Trova indice stazione di partenza nel percorso
+                # Usa le keywords della stazione di PARTENZA cercata (from_id -> from_nome)
+                from_nome_upper = p('from-nome').upper().strip()
+                from_kw_local = [w for w in from_nome_upper.split() if len(w) > 3]
+                # Trova indice della stazione di partenza cercata nel percorso
                 idx_from = 0
                 for i, nome in enumerate(stazioni):
-                    if any(k in nome for k in orig_kw):
+                    if any(k in nome for k in from_kw_local):
                         idx_from = i
                         break
-                # Cerca destinazione dopo la partenza
-                for f in fermate_list[idx_from:]:
+                # Cerca la destinazione DOPO la stazione di partenza
+                for f in fermate_list[idx_from + 1:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        t['orarioArrivoDestinazione'] = f.get('partenza_teorica') or f.get('arrivo_teorico') or f.get('programmata')
+                        print(f"[ORR] {f.get('stazione')} arr_teorico={f.get('arrivo_teorico')} part_teorica={f.get('partenza_teorica')} programmata={f.get('programmata')} effettiva={f.get('effettiva')}", flush=True)
+                        t['orarioArrivoDestinazione'] = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
                         return t
                 return None
 
