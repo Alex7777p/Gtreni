@@ -945,9 +945,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     print(f"[DEBUG] check_fermate SKIP: dati mancanti", flush=True)
                     return None
                 fermate_data = api(f'/fermate/{cod_staz}/{num}/{ts_ms}')
-                print(f"[DEBUG] fermate risposta tipo={type(fermate_data)} len={len(fermate_data) if isinstance(fermate_data, list) else 'N/A'}", flush=True)
-                if fermate_data and isinstance(fermate_data, list) and len(fermate_data) > 0:
-                    print(f"[DEBUG] prima fermata: {fermate_data[0]}", flush=True)
+                print(f"[DEBUG] fermate risposta tipo={type(fermate_data)} val={str(fermate_data)[:200]}", flush=True)
+                # L'API può rispondere con stringa JSON o lista
+                if isinstance(fermate_data, str):
+                    import json as _json
+                    try:
+                        fermate_data = _json.loads(fermate_data)
+                    except:
+                        print(f"[DEBUG] fermate: impossibile parsare stringa JSON", flush=True)
+                        return None
                 if not fermate_data or not isinstance(fermate_data, list):
                     return None
                 orig_upper = (t.get('origine') or '').upper()
