@@ -934,20 +934,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Per i treni non diretti, controlla le fermate in parallelo
             def check_fermate(t):
                 num = t.get('numeroTreno')
-                cod_staz = t.get('codOrigine') or from_id
+                cod_staz = t.get('codOrigine')  # formato S0XXXX richiesto da /fermate
                 ts_ms = t.get('orarioPartenza')
-                if not num or not ts_ms:
+                if not num or not ts_ms or not cod_staz:
                     return None
                 fermate_data = api(f'/fermate/{cod_staz}/{num}/{ts_ms}')
                 if not fermate_data or not isinstance(fermate_data, list):
                     return None
-                passata_partenza = False
-                for f in fermate_data:
+                orig_upper = (t.get('origine') or '').upper()
+                orig_kw = [w for w in orig_upper.split() if len(w) > 3]
+                stazioni = [(f.get('stazione') or '').upper() for f in fermate_data]
+                # Trova indice stazione di partenza nel percorso
+                idx_from = 0
+                for i, nome in enumerate(stazioni):
+                    if any(k in nome for k in orig_kw):
+                        idx_from = i
+                        break
+                # Cerca destinazione dopo la partenza
+                for f in fermate_data[idx_from:]:
                     nome_f = (f.get('stazione') or '').upper()
-                    orig = (t.get('origine') or '').upper()
-                    if not passata_partenza and (orig in nome_f or nome_f in orig or from_id.upper() in nome_f):
-                        passata_partenza = True
-                    if passata_partenza and any(k in nome_f for k in keywords):
+                    if any(k in nome_f for k in keywords):
                         t['orarioArrivoDestinazione'] = f.get('programmata') or f.get('effettiva')
                         return t
                 return None
