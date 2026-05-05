@@ -944,22 +944,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not num or not ts_ms or not cod_staz:
                     print(f"[DEBUG] check_fermate SKIP: dati mancanti", flush=True)
                     return None
-                fermate_data = api(f'/fermate/{cod_staz}/{num}/{ts_ms}')
+                fermate_data = api(f'/andamentoTreno/{cod_staz}/{num}/{ts_ms}')
                 print(f"[DEBUG] fermate risposta tipo={type(fermate_data)} val={str(fermate_data)[:200]}", flush=True)
                 # L'API può rispondere con stringa JSON o lista
-                if isinstance(fermate_data, str):
-                    import json as _json
-                    try:
-                        fermate_data = _json.loads(fermate_data)
-                    except:
-                        print(f"[DEBUG] fermate: impossibile parsare stringa JSON", flush=True)
-                        return None
-                if not fermate_data or not isinstance(fermate_data, list):
+                # andamentoTreno risponde con dict, le fermate sono in ['fermate']
+                if isinstance(fermate_data, dict):
+                    fermate_list = fermate_data.get('fermate', [])
+                elif isinstance(fermate_data, list):
+                    fermate_list = fermate_data
+                else:
+                    print(f"[DEBUG] fermate: risposta inattesa {type(fermate_data)}", flush=True)
                     return None
+                if not fermate_list:
+                    return None
+                stazioni = [(f.get('stazione') or '').upper() for f in fermate_list]
+                print(f"[DEBUG] stazioni={stazioni[:5]}", flush=True)
                 orig_upper = (t.get('origine') or '').upper()
                 orig_kw = [w for w in orig_upper.split() if len(w) > 3]
-                stazioni = [(f.get('stazione') or '').upper() for f in fermate_data]
-                print(f"[DEBUG] stazioni={stazioni[:5]}", flush=True)
                 # Trova indice stazione di partenza nel percorso
                 idx_from = 0
                 for i, nome in enumerate(stazioni):
@@ -967,10 +968,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         idx_from = i
                         break
                 # Cerca destinazione dopo la partenza
-                for f in fermate_data[idx_from:]:
+                for f in fermate_list[idx_from:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        t['orarioArrivoDestinazione'] = f.get('programmata') or f.get('effettiva')
+                        t['orarioArrivoDestinazione'] = f.get('programmataArrivo') or f.get('effettivaArrivo')
                         return t
                 return None
 
