@@ -599,7 +599,8 @@ async function cercaViaggio() {
   if (!toId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di arrivo dalla lista</div>'; return; }
   res.innerHTML = '<div class="loading">🔍 Ricerca soluzioni...</div>';
   try {
-    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
+    const toNome = document.getElementById('v-to').value.trim();
+    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
     if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🔍</div>Nessuna soluzione trovata</div>'; return; }
@@ -887,76 +888,81 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             send_json(self, data[:25] if isinstance(data, list) else [])
 
-        # Cerca viaggio: usa soluzioniViaggioNew per trovare tutti i treni (anche con fermate intermedie)
+        # Cerca viaggio: partenze + controllo fermate per trovare treni che passano per la destinazione
         elif parsed.path == '/api/viaggio':
             from_id = p('from')
-            to_id = p('to')
+            to_nome = p('to-nome').upper().strip()
             date = p('date') or datetime.now().strftime('%Y-%m-%d')
             time_str = p('time') or datetime.now().strftime('%H:%M')
             from datetime import timedelta
+            import concurrent.futures
             try:
                 base_dt = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
             except:
                 base_dt = datetime.now()
 
-            # Formato timestamp richiesto dall'API: DDMMYYYYHHmm
-            ts = base_dt.strftime('%d%m%Y%H%M')
+            # Raccogli partenze su 3 fasce orarie
+            tutti = []
+            seen = set()
+            for delta_h in [0, 2, 4]:
+                dt = base_dt + timedelta(hours=delta_h)
+                orario = build_orario(dt.strftime('%H:%M'), dt.strftime('%Y-%m-%d'))
+                parz = api(f'/partenze/{from_id}/{urllib.parse.quote(orario)}')
+                if parz and isinstance(parz, list):
+                    for t in parz:
+                        key = t.get('numeroTreno')
+                        if key and key not in seen:
+                            seen.add(key)
+                            tutti.append(t)
 
-            # Endpoint ufficiale per soluzioni di viaggio
-            data = api(f'/soluzioniViaggioNew/{from_id}/{to_id}/A/{ts}/A/320/S/0')
-
-            if data is None or not isinstance(data, dict):
-                # Fallback: prova con il vecchio metodo partenze + filtro fermate
-                tutti = []
-                seen = set()
-                for delta_h in [0, 2, 4]:
-                    dt = base_dt + timedelta(hours=delta_h)
-                    orario = build_orario(dt.strftime('%H:%M'), dt.strftime('%Y-%m-%d'))
-                    parz = api(f'/partenze/{from_id}/{urllib.parse.quote(orario)}')
-                    if parz and isinstance(parz, list):
-                        for t in parz:
-                            key = t.get('numeroTreno')
-                            if key and key not in seen:
-                                seen.add(key)
-                                tutti.append(t)
-                tutti.sort(key=lambda t: t.get('orarioPartenza') or 0)
-                send_json(self, tutti[:20])
+            if not tutti:
+                send_json(self, [])
                 return
 
-            soluzioni = data.get('soluzioni', [])
-            risultati = []
-            for sol in soluzioni:
-                vehicles = sol.get('vehicles', [])
-                if not vehicles:
-                    continue
-                primo = vehicles[0]
-                ultimo = vehicles[-1]
-                cambio = len(vehicles) > 1
+            # Controlla se la dest. è nella destinazione finale (veloce, senza chiamate extra)
+            keywords = [w for w in to_nome.split() if len(w) > 3]
+            diretti_veloci = []
+            da_controllare = []
+            for t in tutti[:20]:
+                dest = (t.get('destinazione') or '').upper()
+                if any(k in dest for k in keywords) or to_nome in dest:
+                    diretti_veloci.append(t)
+                else:
+                    da_controllare.append(t)
 
-                # Calcola durata totale
-                try:
-                    t_part = datetime.fromtimestamp(primo.get('orarioPartenza', 0) / 1000)
-                    t_arr = datetime.fromtimestamp(ultimo.get('orarioArrivo', 0) / 1000)
-                    dur_min = int((t_arr - t_part).total_seconds() / 60)
-                except:
-                    dur_min = None
+            # Per i treni non diretti, controlla le fermate in parallelo
+            def check_fermate(t):
+                num = t.get('numeroTreno')
+                cod_staz = t.get('codOrigine') or from_id
+                ts_ms = t.get('orarioPartenza')
+                if not num or not ts_ms:
+                    return None
+                fermate_data = api(f'/fermate/{cod_staz}/{num}/{ts_ms}')
+                if not fermate_data or not isinstance(fermate_data, list):
+                    return None
+                passata_partenza = False
+                for f in fermate_data:
+                    nome_f = (f.get('stazione') or '').upper()
+                    orig = (t.get('origine') or '').upper()
+                    if not passata_partenza and (orig in nome_f or nome_f in orig or from_id.upper() in nome_f):
+                        passata_partenza = True
+                    if passata_partenza and any(k in nome_f for k in keywords):
+                        t['orarioArrivoDestinazione'] = f.get('programmata') or f.get('effettiva')
+                        return t
+                return None
 
-                risultati.append({
-                    'soluzioneType': 'cambio' if cambio else 'diretto',
-                    'numeroTreno': primo.get('numeroTreno'),
-                    'categoria': primo.get('categoriaDescrizione', ''),
-                    'origine': primo.get('origine', ''),
-                    'destinazione': ultimo.get('destinazione', ''),
-                    'orarioPartenza': primo.get('orarioPartenza'),
-                    'orarioArrivo': ultimo.get('orarioArrivo'),
-                    'durataMinuti': dur_min,
-                    'cambi': len(vehicles) - 1,
-                    'vehicles': vehicles,
-                    'ritardo': primo.get('ritardo'),
-                    'binarioProgrammatoPartenzaDescrizione': primo.get('binarioProgrammatoPartenzaDescrizione', '–'),
-                })
+            trovati_fermate = []
+            if da_controllare and keywords:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                    futures = [ex.submit(check_fermate, t) for t in da_controllare[:12]]
+                    for fut in concurrent.futures.as_completed(futures):
+                        res = fut.result()
+                        if res is not None:
+                            trovati_fermate.append(res)
 
-            send_json(self, risultati[:20])
+            risultati = diretti_veloci + trovati_fermate
+            risultati.sort(key=lambda t: t.get('orarioPartenza') or 0)
+            send_json(self, risultati[:15] if risultati else tutti[:15])
 
         # Stato treno
         elif parsed.path == '/api/treno':
