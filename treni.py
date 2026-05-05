@@ -673,11 +673,34 @@ async function cercaTutto() {
 
     // Sezione cambi
     const listaCambi = Array.isArray(cambi) ? cambi : [];
-    html += `<div class="section-label" style="margin:16px 0 8px;font-size:0.82rem;color:var(--muted)">🔄 Soluzioni con cambio (${listaCambi.length})</div>`;
     if (listaCambi.length > 0) {
-      html += `<div class="train-list">${listaCambi.map((s,i) => htmlCambio(s, i, toNome)).join('')}</div>`;
+      html += '<div class="section-label" style="margin:16px 0 8px;font-size:0.82rem;color:var(--muted)">🔄 Soluzioni con cambio (' + listaCambi.length + ')</div>';
+      html += '<div class="train-list">' + listaCambi.map((s,i) => htmlCambio(s, i, toNome)).join('') + '</div>';
     } else {
-      html += '<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;font-size:0.83rem;color:#f87171">❌ Nessuna soluzione con cambio trovata</div>';
+      // Mostra riquadro con dati per lefrecce.it
+      const dateFormatted = date ? date.split('-').reverse().join('/') : '';
+      html += '<div style="margin-top:16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:16px 18px">' +
+        '<div style="font-size:0.85rem;font-weight:600;color:#a5b4fc;margin-bottom:12px">🔄 Per soluzioni con cambio, cerca su lefrecce.it:</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
+          '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px">' +
+            '<div style="font-size:0.68rem;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Da</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + fromNome + '</div>' +
+          '</div>' +
+          '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px">' +
+            '<div style="font-size:0.68rem;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">A</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + toNome + '</div>' +
+          '</div>' +
+          '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px">' +
+            '<div style="font-size:0.68rem;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Data</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + dateFormatted + '</div>' +
+          '</div>' +
+          '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px">' +
+            '<div style="font-size:0.68rem;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Ora</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + time + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="window.open(\"https://www.lefrecce.it\",\"_blank\")" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:white;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">🌐 Apri lefrecce.it →</button>' +
+      '</div>';
     }
 
     res.innerHTML = html;
