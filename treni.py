@@ -1022,9 +1022,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             da_controllare = []
             for t in tutti[:20]:
                 dest = (t.get('destinazione') or '').upper()
-                # Match preciso: tutti i keywords devono essere presenti
-                if (all(k in dest for k in keywords) and keywords) or to_nome in dest:
-                    diretti_veloci.append(t)
+                # Match preciso: il nome completo deve essere contenuto nella destinazione
+                # oppure tutti i keyword devono essere presenti
+                match_esatto = to_nome in dest
+                match_kw = keywords and all(k in dest for k in keywords)
+                # Evita falsi positivi: se la destinazione contiene parole extra non volute
+                # es. "CIAMPINO" non deve matchare "ROMA TUSCOLANA"
+                if match_esatto or match_kw:
+                    # Verifica che non sia un match parziale indesiderato
+                    # Se to_nome è una parola sola, richiedi match esatto nella destinazione
+                    parole_dest = dest.split()
+                    parole_to = to_nome.split()
+                    if all(p in parole_dest for p in parole_to):
+                        diretti_veloci.append(t)
+                    else:
+                        da_controllare.append(t)
                 else:
                     da_controllare.append(t)
 
