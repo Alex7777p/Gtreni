@@ -332,8 +332,8 @@ header h1 span { color: var(--accent2); }
   <div class="container">
     <div class="card">
       <div class="card-title">🗺️ Cerca soluzioni di viaggio</div>
-      <div class="form-grid cols4">
-        <div class="form-group">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:14px">
+        <div class="form-group" style="margin:0">
           <label>Stazione di partenza</label>
           <div class="ac-wrap">
             <input id="v-from" placeholder="Es. Bergamo" autocomplete="off">
@@ -341,7 +341,8 @@ header h1 span { color: var(--accent2); }
             <input type="hidden" id="v-from-id">
           </div>
         </div>
-        <div class="form-group">
+        <button onclick="reverseViaggio()" title="Inverti stazioni" style="background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1.1rem;color:var(--muted);flex-shrink:0;margin-bottom:2px;transition:all 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⇄</button>
+        <div class="form-group" style="margin:0">
           <label>Stazione di arrivo</label>
           <div class="ac-wrap">
             <input id="v-to" placeholder="Es. Milano Centrale" autocomplete="off">
@@ -349,11 +350,11 @@ header h1 span { color: var(--accent2); }
             <input type="hidden" id="v-to-id">
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin:0">
           <label>Data</label>
           <input type="date" id="v-date">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin:0">
           <label>Ora partenza</label>
           <input type="time" id="v-time">
         </div>
@@ -361,33 +362,6 @@ header h1 span { color: var(--accent2); }
       <div class="btn-row">
         <button class="btn" onclick="cercaViaggio()">🔍 Cerca treni diretti</button>
         <button class="btn" style="background:linear-gradient(135deg,#059669,#0d9488);margin-left:10px" onclick="apriTrenitalia()">🌐 Cerca su Trenitalia (con cambi)</button>
-      </div>
-      <!-- Riquadro dati viaggio per Trenitalia -->
-      <div id="trenitalia-box" style="display:none;margin-top:18px;background:#0d2b1f;border:1px solid #059669;border-radius:12px;padding:18px 22px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <span style="font-size:1.2rem">🌐</span>
-          <span style="font-weight:700;color:#4ade80">Trenitalia si è aperto!</span>
-          <button onclick="document.getElementById('trenitalia-box').style.display='none'" style="margin-left:auto;background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem">✕</button>
-        </div>
-        <p id="tr-msg" style="font-size:0.85rem;color:#94a3b8;margin-bottom:14px">Copia questi dati nei campi del sito:</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
-          <div style="background:#0f172a;border-radius:8px;padding:10px 14px;border:1px solid #334155">
-            <div style="font-size:0.7rem;color:#64748b;text-transform:uppercase;margin-bottom:4px">Partenza</div>
-            <div id="tr-from" style="font-weight:700;color:#f1f5f9;font-size:0.95rem"></div>
-          </div>
-          <div style="background:#0f172a;border-radius:8px;padding:10px 14px;border:1px solid #334155">
-            <div style="font-size:0.7rem;color:#64748b;text-transform:uppercase;margin-bottom:4px">Arrivo</div>
-            <div id="tr-to" style="font-weight:700;color:#f1f5f9;font-size:0.95rem"></div>
-          </div>
-          <div style="background:#0f172a;border-radius:8px;padding:10px 14px;border:1px solid #334155">
-            <div style="font-size:0.7rem;color:#64748b;text-transform:uppercase;margin-bottom:4px">Data</div>
-            <div id="tr-date" style="font-weight:700;color:#f1f5f9;font-size:0.95rem"></div>
-          </div>
-          <div style="background:#0f172a;border-radius:8px;padding:10px 14px;border:1px solid #334155">
-            <div style="font-size:0.7rem;color:#64748b;text-transform:uppercase;margin-bottom:4px">Ora</div>
-            <div id="tr-time" style="font-weight:700;color:#f1f5f9;font-size:0.95rem"></div>
-          </div>
-        </div>
       </div>
     </div>
     <div id="res-v"></div>
@@ -570,29 +544,22 @@ function delayHtml(r) {
 }
 
 // APRI TRENITALIA
-function apriTrenitalia(auto) {
-  const from = document.getElementById('v-from').value.trim();
-  const to = document.getElementById('v-to').value.trim();
-  const date = document.getElementById('v-date').value;
-  const time = document.getElementById('v-time').value;
-  if (!from || !to) return;
-  let dateStr = date;
-  if (date) {
-    const [y,m,d] = date.split('-');
-    dateStr = `${d}/${m}/${y}`;
-  }
-  // Mostra riquadro dati
-  const box = document.getElementById('trenitalia-box');
-  document.getElementById('tr-from').textContent = from;
-  document.getElementById('tr-to').textContent = to;
-  document.getElementById('tr-date').textContent = dateStr;
-  document.getElementById('tr-time').textContent = time;
-  // Messaggio diverso se automatico o manuale
-  document.getElementById('tr-msg').textContent = auto
-    ? '⚠️ Nessun treno diretto trovato. Apro lefrecce.it con i dati del tuo viaggio — compilali e cerca!'
-    : 'Copia questi dati su lefrecce.it per trovare tutte le soluzioni con cambi:';
-  box.style.display = 'block';
+function apriTrenitalia() {
   window.open('https://www.lefrecce.it', '_blank');
+}
+
+function reverseViaggio() {
+  const fromInput = document.getElementById('v-from');
+  const toInput = document.getElementById('v-to');
+  const fromId = document.getElementById('v-from-id');
+  const toId = document.getElementById('v-to-id');
+  const tmpVal = fromInput.value;
+  const tmpId = fromId.value;
+  fromInput.value = toInput.value;
+  fromId.value = toId.value;
+  toInput.value = tmpVal;
+  toId.value = tmpId;
+  document.getElementById('res-v').innerHTML = '';
 }
 
 // CERCA VIAGGIO
@@ -1022,9 +989,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for f in fermate_list[idx_from:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        arr = f.get('arrivo_teorico') or f.get('partenza_teorica') or f.get('programmata')
-                        print(f"[ARR] stazione={f.get('stazione')} arrivo_teorico={f.get('arrivo_teorico')} partenza_teorica={f.get('partenza_teorica')} programmata={f.get('programmata')} effettiva={f.get('effettiva')}", flush=True)
-                        t['orarioArrivoDestinazione'] = arr
+                        t['orarioArrivoDestinazione'] = f.get('partenza_teorica') or f.get('arrivo_teorico') or f.get('programmata')
                         return t
                 return None
 
