@@ -844,7 +844,7 @@ async function cercaTreno() {
                 <div class="dot ${f.actualFermataType===1?'passed':f.actualFermataType===2?'current':''}"></div>
                 <div class="stop-name">${f.stazione}</div>
                 <div class="stop-time">${fmt(f.programmata)}</div>
-                ${f.ritardo?`<span class="${f.ritardo>0?'delay-late':'delay-ok'}">${f.ritardo>0?'+'+f.ritardo:'✓'}</span>`:''}
+                ${f.ritardo?(f.ritardo>0?('<span class="delay-late">+'+f.ritardo+'</span>'):('<span class="delay-ok">✓</span>')):''}
               </div>`).join('')}
           </div>`:''}
       </div>`;
@@ -857,7 +857,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(regs => {
       regs.forEach(r => r.unregister());
     });
-    navigator.serviceWorker.register('/sw.js?v=2')
+    navigator.serviceWorker.register('/sw.js')
       .then(reg => reg.update())
       .catch(err => console.log('SW errore:', err));
   });
