@@ -580,8 +580,8 @@ function htmlTreno(t, idx, toNome) {
         <div class="train-dest">→ ${t.destinazione||'–'}</div>
         <div class="train-sub">
           🕐 Partenza: <b>${fmt(t.orarioPartenza)}</b>
-          ${arrDest ? `&nbsp;→&nbsp;<b>${toNome}</b>: <b>${arrDest}</b>` : ''}
-          ${durStr ? `&nbsp;·&nbsp;<span style="color:var(--accent)">${durStr}</span>` : ''}
+          ${arrDest ? ('&nbsp;→&nbsp;<b>' + toNome + '</b>: <b>' + arrDest + '</b>') : ''}
+          ${durStr ? ('&nbsp;·&nbsp;<span style="color:var(--accent)">' + durStr + '</span>') : ''}
         </div>
       </div>
       <span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>
@@ -612,8 +612,8 @@ function htmlCambio(s, idx, toNome) {
       <div style="display:flex;align-items:center;gap:8px;width:100%;flex-wrap:wrap">
         <span class="sbadge" style="background:#2d1b69;color:#a78bfa;border:1px solid #7c3aed;font-size:0.72rem">🔄 1 cambio</span>
         <span style="font-size:0.82rem;color:var(--muted)">Partenza: <b style="color:var(--text)">${partStr}</b></span>
-        ${arrStr !== '–' ? `<span style="font-size:0.82rem;color:var(--muted)">→ <b style="color:var(--text)">${toNome}</b>: <b style="color:var(--text)">${arrStr}</b></span>` : ''}
-        ${durTot ? `<span style="color:var(--accent);font-size:0.82rem">· ${durTot}</span>` : ''}
+        ${arrStr !== '–' ? ('<span style="font-size:0.82rem;color:var(--muted)">→ <b style="color:var(--text)">' + toNome + '</b>: <b style="color:var(--text)">' + arrStr + '</b></span>') : ''}
+        ${durTot ? ('<span style="color:var(--accent);font-size:0.82rem">· ' + durTot + '</span>') : ''}
       </div>
       <div style="display:flex;align-items:stretch;gap:0;width:100%">
         <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
@@ -632,7 +632,7 @@ function htmlCambio(s, idx, toNome) {
           <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t2.destinazione||toNome}</div>
         </div>
       </div>
-      ${(t1.ritardo > 0 || t2.ritardo > 0) ? `<div style="font-size:0.75rem;color:#f87171">⚠️ Ritardi in corso — verifica la connessione al cambio</div>` : ''}
+      ${(t1.ritardo > 0 || t2.ritardo > 0) ? '<div style="font-size:0.75rem;color:#f87171">⚠️ Ritardi in corso</div>' : ''}
     </div>`;
 }
 
