@@ -990,7 +990,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for f in fermate_list[idx_from + 1:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        print(f"[ORR] {f.get('stazione')} arr_teorico={f.get('arrivo_teorico')} part_teorica={f.get('partenza_teorica')} programmata={f.get('programmata')} effettiva={f.get('effettiva')}", flush=True)
                         t['orarioArrivoDestinazione'] = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
                         return t
                 return None
