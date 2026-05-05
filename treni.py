@@ -1043,6 +1043,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             # Controlla se la dest. è nella destinazione finale (veloce, senza chiamate extra)
             keywords = [w for w in to_nome.split() if len(w) > 3]
+            # Funzione match: richiede che TUTTE le parole siano presenti come parole intere
+            def match_stazione(nome_f, kws, nome_completo):
+                parole = nome_f.upper().split()
+                return nome_completo in nome_f or all(k in parole for k in kws)
             diretti_veloci = []
             da_controllare = []
             for t in tutti[:20]:
@@ -1097,7 +1101,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 # Cerca la destinazione DOPO la stazione di partenza
                 for f in fermate_list[idx_from + 1:]:
                     nome_f = (f.get('stazione') or '').upper()
-                    if any(k in nome_f for k in keywords):
+                    if match_stazione(nome_f, keywords, to_nome):
                         t['orarioArrivoDestinazione'] = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
                         return t
                 return None
@@ -1165,7 +1169,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     # Verifica che la destinazione venga dopo
                     for f in fermate[idx_f + 1:]:
                         nome_f = (f.get('stazione') or '').upper()
-                        if any(k in nome_f for k in keywords):
+                        if match_stazione(nome_f, keywords, to_nome):
                             # Recupera orario partenza dalla stazione from
                             t['orarioPartenza'] = fermate[idx_f].get('partenza_teorica') or fermate[idx_f].get('programmata')
                             t['orarioArrivoDestinazione'] = f.get('arrivo_teorico') or f.get('programmata')
@@ -1384,7 +1388,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 if ferro2 and isinstance(ferro2, dict):
                                     for f2 in ferro2.get('fermate', []):
                                         nome2 = (f2.get('stazione') or '').upper()
-                                        if any(k in nome2 for k in to_kw):
+                                        if to_nome.upper() in nome2 or all(k in nome2.split() for k in to_kw):
                                             t2['orarioArrivoDestinazione'] = f2.get('arrivo_teorico') or f2.get('programmata')
                                             arriva_dest = True
                                             break
