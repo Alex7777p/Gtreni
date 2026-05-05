@@ -134,8 +134,11 @@ header h1 span { color: var(--accent2); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
 .form-grid.cols4 { grid-template-columns: 1fr 1fr 160px 160px; }
+.viaggio-form { display: grid; grid-template-columns: 1fr auto 1fr 1fr 1fr; gap: 10px; align-items: end; margin-bottom: 14px; }
 @media(max-width:640px) {
   .form-grid, .form-grid.cols3, .form-grid.cols4 { grid-template-columns: 1fr; }
+  .viaggio-form { grid-template-columns: 1fr 1fr; }
+  .viaggio-form .swap-btn-wrap { display: none; }
   header { padding: 12px 16px; }
   header .logo { font-size: 1.5rem; }
   header h1 { font-size: 1.1rem; }
@@ -332,7 +335,7 @@ header h1 span { color: var(--accent2); }
   <div class="container">
     <div class="card">
       <div class="card-title">🗺️ Cerca soluzioni di viaggio</div>
-      <div style="display:grid;grid-template-columns:1fr auto 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:14px">
+      <div class="viaggio-form">
         <div class="form-group" style="margin:0">
           <label>Stazione di partenza</label>
           <div class="ac-wrap">
@@ -341,7 +344,7 @@ header h1 span { color: var(--accent2); }
             <input type="hidden" id="v-from-id">
           </div>
         </div>
-        <button onclick="reverseViaggio()" title="Inverti stazioni" style="background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1.1rem;color:var(--muted);flex-shrink:0;margin-bottom:2px;transition:all 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⇄</button>
+        <div class="swap-btn-wrap" style="display:flex;align-items:flex-end;padding-bottom:2px"><button onclick="reverseViaggio()" title="Inverti stazioni" style="background:var(--card);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1.1rem;color:var(--muted);flex-shrink:0;transition:all 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⇄</button></div>
         <div class="form-group" style="margin:0">
           <label>Stazione di arrivo</label>
           <div class="ac-wrap">
