@@ -684,7 +684,7 @@ async function cercaTutto() {
       const dateFormatted = date ? date.split('-').reverse().join('/') : '';
       html += '<div style="margin-top:16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:16px 18px">' +
         '<div style="font-size:0.85rem;font-weight:600;color:#a5b4fc;margin-bottom:12px">🔄 Per soluzioni con cambio, cerca su lefrecce.it:</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' +
           '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px">' +
             '<div style="font-size:0.68rem;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Da</div>' +
             '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + fromNome + '</div>' +
