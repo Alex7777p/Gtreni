@@ -916,6 +916,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             seen.add(key)
                             tutti.append(t)
 
+            print(f"[DEBUG] from_id={from_id} to_nome={to_nome} from_nome={p('from-nome')} tutti={len(tutti)}", flush=True)
+
             if not tutti:
                 send_json(self, [])
                 return
@@ -931,19 +933,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     da_controllare.append(t)
 
+            print(f"[DEBUG] keywords={keywords} diretti_veloci={len(diretti_veloci)} da_controllare={len(da_controllare)}", flush=True)
+
             # Per i treni non diretti, controlla le fermate in parallelo
             def check_fermate(t):
                 num = t.get('numeroTreno')
                 cod_staz = t.get('codOrigine')  # formato S0XXXX richiesto da /fermate
                 ts_ms = t.get('orarioPartenza')
+                print(f"[DEBUG] check_fermate num={num} cod_staz={cod_staz} ts_ms={ts_ms}", flush=True)
                 if not num or not ts_ms or not cod_staz:
+                    print(f"[DEBUG] check_fermate SKIP: dati mancanti", flush=True)
                     return None
                 fermate_data = api(f'/fermate/{cod_staz}/{num}/{ts_ms}')
+                print(f"[DEBUG] fermate risposta tipo={type(fermate_data)} len={len(fermate_data) if isinstance(fermate_data, list) else 'N/A'}", flush=True)
+                if fermate_data and isinstance(fermate_data, list) and len(fermate_data) > 0:
+                    print(f"[DEBUG] prima fermata: {fermate_data[0]}", flush=True)
                 if not fermate_data or not isinstance(fermate_data, list):
                     return None
                 orig_upper = (t.get('origine') or '').upper()
                 orig_kw = [w for w in orig_upper.split() if len(w) > 3]
                 stazioni = [(f.get('stazione') or '').upper() for f in fermate_data]
+                print(f"[DEBUG] stazioni={stazioni[:5]}", flush=True)
                 # Trova indice stazione di partenza nel percorso
                 idx_from = 0
                 for i, nome in enumerate(stazioni):
