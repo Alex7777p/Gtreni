@@ -1099,11 +1099,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                     arrivi_trovati.append(t)
                 arrivi_trovati.sort(key=lambda t: t.get('orarioArrivo') or 0)
 
+            # Per i treni trovati via arrivi, recupera destinazione e orario partenza
+            def arricchisci_arrivo(t):
+                if t.get('destinazione') and t.get('orarioPartenza'):
+                    return t
+                num = t.get('numeroTreno')
+                cod = t.get('codOrigine')
+                ts = t.get('orarioArrivo') or t.get('orarioPartenza')
+                if not num or not cod or not ts:
+                    return t
+                ferro = api(f'/andamentoTreno/{cod}/{num}/{ts}')
+                if ferro and isinstance(ferro, dict):
+                    if not t.get('destinazione'):
+                        t['destinazione'] = ferro.get('destinazione') or ''
+                    # Trova orario di partenza dalla stazione di partenza cercata
+                    from_kw_arr = [w for w in from_nome.split() if len(w) > 3]
+                    for f in ferro.get('fermate', []):
+                        nome_f = (f.get('stazione') or '').upper()
+                        if any(k in nome_f for k in from_kw_arr):
+                            t['orarioPartenza'] = f.get('partenza_teorica') or f.get('programmata')
+                            t['orarioArrivoDestinazione'] = t.get('orarioArrivo')
+                            break
+                return t
+
             # Unisci le due strategie, preferendo i risultati da partenze
             numeri_gia_trovati = {t.get('numeroTreno') for t in risultati}
             for t in arrivi_trovati:
                 if t.get('numeroTreno') not in numeri_gia_trovati:
-                    risultati.append(t)
+                    risultati.append(arricchisci_arrivo(t))
 
             risultati.sort(key=lambda t: t.get('orarioPartenza') or t.get('orarioArrivo') or 0)
 
