@@ -768,16 +768,17 @@ async function cercaPartenze() {
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
     if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🚉</div>Nessun treno trovato</div>'; return; }
-    res.innerHTML = `<div class="train-list">${data.slice(0,25).map(t => `
-      <div class="train-card">
-        <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno}</div>
-        <div class="train-info">
-          <div class="train-dest">→ ${t.destinazione||'–'}</div>
-          <div class="train-sub">Partenza: <b>${fmt(t.orarioPartenza)}</b></div>
-        </div>
-        ${delayHtml(t.ritardo)}
-        <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
-      </div>`).join('')}</div>`;
+    res.innerHTML = '<div class="train-list">' + data.slice(0,25).map(t => {
+      return '<div class="train-card">' +
+        '<div class="train-badge">' + (t.categoria||'') + '<br>' + t.numeroTreno + '</div>' +
+        '<div class="train-info">' +
+          '<div class="train-dest">→ ' + (t.destinazione||'–') + '</div>' +
+          '<div class="train-sub">Partenza: <b>' + fmt(t.orarioPartenza) + '</b></div>' +
+        '</div>' +
+        delayHtml(t.ritardo) +
+        '<div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">' + (t.binarioProgrammatoPartenzaDescrizione||'–') + '</div></div>' +
+      '</div>';
+    }).join('') + '</div>';
   } catch(e) { res.innerHTML = '<div class="error-box">❌ Errore. Riprova.</div>'; }
 }
 
@@ -793,16 +794,17 @@ async function cercaArrivi() {
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
     if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🏁</div>Nessun treno trovato</div>'; return; }
-    res.innerHTML = `<div class="train-list">${data.slice(0,25).map(t => `
-      <div class="train-card">
-        <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno}</div>
-        <div class="train-info">
-          <div class="train-dest">← Da ${t.origine||'–'}</div>
-          <div class="train-sub">Arrivo: <b>${fmt(t.orarioArrivo)}</b></div>
-        </div>
-        ${delayHtml(t.ritardo)}
-        <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoArrivoDescrizione||'–'}</div></div>
-      </div>`).join('')}</div>`;
+    res.innerHTML = '<div class="train-list">' + data.slice(0,25).map(t => {
+      return '<div class="train-card">' +
+        '<div class="train-badge">' + (t.categoria||'') + '<br>' + t.numeroTreno + '</div>' +
+        '<div class="train-info">' +
+          '<div class="train-dest">← Da ' + (t.origine||'–') + '</div>' +
+          '<div class="train-sub">Arrivo: <b>' + fmt(t.orarioArrivo) + '</b></div>' +
+        '</div>' +
+        delayHtml(t.ritardo) +
+        '<div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">' + (t.binarioProgrammatoArrivoDescrizione||'–') + '</div></div>' +
+      '</div>';
+    }).join('') + '</div>';
   } catch(e) { res.innerHTML = '<div class="error-box">❌ Errore. Riprova.</div>'; }
 }
 
