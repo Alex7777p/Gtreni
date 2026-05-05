@@ -361,7 +361,7 @@ header h1 span { color: var(--accent2); }
       </div>
       <div class="btn-row">
         <button class="btn" onclick="cercaViaggio()">🔍 Cerca treni diretti</button>
-        <button class="btn" style="background:linear-gradient(135deg,#059669,#0d9488);margin-left:10px" onclick="apriTrenitalia()">🌐 Cerca su Trenitalia (con cambi)</button>
+        <button class="btn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);margin-left:10px" onclick="cercaCambi()">🔄 Cerca con cambi</button>
       </div>
     </div>
     <div id="res-v"></div>
@@ -660,6 +660,76 @@ async function cercaViaggio() {
       ${diretti.length > 0 ? `<div class="section-label" style="margin-bottom:8px">✅ Treni diretti (${diretti.length})</div>` : ''}
       <div class="train-list">${lista.map((t,i) => htmlTreno(t,i)).join('')}</div>
       ${mostraCambio ? `<div style="margin-top:6px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.83rem;color:#fbbf24">⚠️ Nessun treno diretto trovato — mostrate soluzioni con cambio</div>` : ''}
+    `;
+  } catch(e) {
+    res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
+  }
+}
+
+// CAMBI
+async function cercaCambi() {
+  const fromId = document.getElementById('v-from-id').value;
+  const toId = document.getElementById('v-to-id').value;
+  const date = document.getElementById('v-date').value;
+  const time = document.getElementById('v-time').value;
+  const res = document.getElementById('res-v');
+  if (!fromId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di partenza dalla lista</div>'; return; }
+  if (!toId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di arrivo dalla lista</div>'; return; }
+  res.innerHTML = '<div class="loading">🔄 Ricerca soluzioni con cambio... (può richiedere qualche secondo)</div>';
+  try {
+    const toNome = document.getElementById('v-to').value.trim();
+    const fromNome = document.getElementById('v-from').value.trim();
+    const r = await fetch(`/api/cambi?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
+    const data = await r.json();
+    if (!data || !data.length) {
+      res.innerHTML = '<div class="error-box">❌ Nessuna soluzione con cambio trovata. Prova ad allargare l'orario di ricerca.</div>';
+      return;
+    }
+    const htmlCambio = (s, idx) => {
+      const t1 = s.treno1;
+      const t2 = s.treno2;
+      const partStr = fmt(s.orarioPartenza);
+      const arrStr = s.orarioArrivo ? fmt(s.orarioArrivo) : '–';
+      const arrCambio = fmt(s.oraArrCambio);
+      const partCambio = fmt(s.oraPartCambio);
+      const attesa = s.attesaMin;
+      let durTot = '';
+      if (s.orarioPartenza && s.orarioArrivo) {
+        const diffMin = Math.round((s.orarioArrivo - s.orarioPartenza) / 60000);
+        if (diffMin > 0) durTot = fmtDur(diffMin);
+      }
+      return `
+        <div class="train-card" style="flex-direction:column;align-items:flex-start;gap:10px">
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <span class="sbadge" style="background:#2d1b69;color:#a78bfa;border:1px solid #7c3aed;font-size:0.72rem">🔄 1 cambio</span>
+            <span style="font-size:0.82rem;color:var(--muted)">Partenza: <b style="color:var(--text)">${partStr}</b></span>
+            ${arrStr !== '–' ? `<span style="font-size:0.82rem;color:var(--muted)">→ Arrivo: <b style="color:var(--text)">${arrStr}</b></span>` : ''}
+            ${durTot ? `<span style="color:var(--accent);font-size:0.82rem">· ${durTot}</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:stretch;gap:0;width:100%">
+            <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
+              <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
+              <div style="font-size:0.85rem;font-weight:600">${partStr} → ${arrCambio}</div>
+              <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t1.destinazione||'–'}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+              <div style="font-size:0.7rem;color:#a78bfa;font-weight:600">CAMBIO</div>
+              <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap">${s.stazioneCAMBIO.split(' ').slice(0,2).join(' ')}</div>
+              <div style="font-size:0.7rem;color:var(--muted)">attesa ${attesa} min</div>
+            </div>
+            <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:10px 14px;border:1px solid var(--border)">
+              <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
+              <div style="font-size:0.85rem;font-weight:600">${partCambio} → ${arrStr}</div>
+              <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t2.destinazione||toNome}</div>
+            </div>
+          </div>
+          ${(t1.ritardo > 0 || t2.ritardo > 0) ? `<div style="font-size:0.75rem;color:#f87171">⚠️ Attenzione: ritardi in corso — verifica la connessione al cambio</div>` : ''}
+        </div>`;
+    };
+
+    res.innerHTML = `
+      <div style="margin-bottom:8px;font-size:0.82rem;color:var(--muted)">🔄 Soluzioni con cambio trovate: <b style="color:var(--text)">${data.length}</b></div>
+      <div class="train-list">${data.map((s,i) => htmlCambio(s,i)).join('')}</div>
     `;
   } catch(e) {
     res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
@@ -1039,7 +1109,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if risultati:
                 send_json(self, risultati[:15])
             else:
-                send_json(self, {'error': 'Nessun treno diretto trovato tra queste stazioni. Usa il tasto Cerca su Trenitalia per soluzioni con cambio.'})
+                send_json(self, {'error': 'Nessun treno diretto trovato. Prova il tasto Cerca con cambi 🔄'})
 
         # Stato treno
         elif parsed.path == '/api/fermate':
@@ -1055,6 +1125,197 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             fermate = data.get('fermate', [])
             send_json(self, {'fermate': fermate})
+
+        elif parsed.path == '/api/cambi':
+            from_id = p('from')
+            to_id = p('to')
+            to_nome = p('to-nome').upper().strip()
+            from_nome = p('from-nome').upper().strip()
+            date = p('date') or datetime.now().strftime('%Y-%m-%d')
+            time_str = p('time') or datetime.now().strftime('%H:%M')
+            from datetime import timedelta
+            import concurrent.futures
+            MARGINE_MIN = 15  # minuti minimi per il cambio
+            try:
+                base_dt = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
+            except:
+                base_dt = datetime.now()
+
+            # Stazioni di interscambio principali italiane
+            INTERSCAMBI = {
+                'ROMA TERMINI': 'S08409',
+                'MILANO CENTRALE': 'S01700',
+                'BOLOGNA CENTRALE': 'S03300',
+                'FIRENZE S.M.N.': 'S06103',
+                'NAPOLI CENTRALE': 'S09218',
+                'TORINO PORTA NUOVA': 'S00219',
+                'VENEZIA SANTA LUCIA': 'S02528',
+                'GENOVA PIAZZA PRINCIPE': 'S00588',
+                'PADOVA': 'S02534',
+                'VERONA PORTA NUOVA': 'S02112',
+                'REGGIO CALABRIA': 'S11781',
+                'BARI CENTRALE': 'S10030',
+                'PALERMO CENTRALE': 'S12101',
+                'CATANIA CENTRALE': 'S12325',
+                'TRIESTE CENTRALE': 'S02827',
+                'BRESCIA': 'S02002',
+                'PISA CENTRALE': 'S06401',
+                'ANCONA': 'S07101',
+                'PESCARA CENTRALE': 'S08101',
+                'SALERNO': 'S09601',
+                'CASSINO': 'S08662',
+                'FROSINONE': 'S08501',
+                'LATINA': 'S08601',
+                'CASERTA': 'S09101',
+                'REGGIO EMILIA': 'S03521',
+                'MODENA': 'S03501',
+                'PARMA': 'S03601',
+                'PIACENZA': 'S03701',
+                'BERGAMO': 'S01940',
+                'VARESE': 'S01801',
+                'COMO SAN GIOVANNI': 'S01901',
+                'ALESSANDRIA': 'S00501',
+            }
+            to_kw = [w for w in to_nome.split() if len(w) > 3]
+
+            # Raccoglie treni da stazione A
+            treni_a = []
+            seen = set()
+            for delta_h in [0, 2]:
+                dt = base_dt + timedelta(hours=delta_h)
+                orario = build_orario(dt.strftime('%H:%M'), dt.strftime('%Y-%m-%d'))
+                parz = api(f'/partenze/{from_id}/{urllib.parse.quote(orario)}')
+                if parz and isinstance(parz, list):
+                    for t in parz:
+                        key = t.get('numeroTreno')
+                        if key and key not in seen:
+                            seen.add(key)
+                            treni_a.append(t)
+
+            if not treni_a:
+                send_json(self, [])
+                return
+
+            # Per ogni treno, trova le fermate e cerca interscambi
+            def trova_cambi(t):
+                num = t.get('numeroTreno')
+                cod = t.get('codOrigine')
+                ts_ms = t.get('orarioPartenza')
+                if not num or not ts_ms or not cod:
+                    return []
+                ferro = api(f'/andamentoTreno/{cod}/{num}/{ts_ms}')
+                if not ferro or not isinstance(ferro, dict):
+                    return []
+                fermate = ferro.get('fermate', [])
+                if not fermate:
+                    return []
+
+                # Trova la stazione di partenza nel percorso
+                from_kw_l = [w for w in from_nome.split() if len(w) > 3]
+                idx_from = 0
+                for i, f in enumerate(fermate):
+                    nome = (f.get('stazione') or '').upper()
+                    if any(k in nome for k in from_kw_l):
+                        idx_from = i
+                        break
+
+                soluzioni = []
+                # Scansiona fermate dopo la partenza per trovare interscambi
+                for f in fermate[idx_from + 1:]:
+                    nome_f = (f.get('stazione') or '').upper()
+                    # Controlla se questa fermata è una stazione di interscambio
+                    staz_cambio_id = None
+                    staz_cambio_nome = None
+                    for nome_int, id_int in INTERSCAMBI.items():
+                        if any(part in nome_f for part in nome_int.split() if len(part) > 3):
+                            staz_cambio_id = id_int
+                            staz_cambio_nome = nome_int
+                            break
+                    if not staz_cambio_id:
+                        continue
+                    if staz_cambio_id == from_id:
+                        continue
+
+                    # Orario arrivo al cambio
+                    arr_cambio_ms = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
+                    if not arr_cambio_ms:
+                        continue
+                    try:
+                        arr_cambio_dt = datetime.fromtimestamp(arr_cambio_ms / 1000)
+                    except:
+                        continue
+
+                    # Cerca treni da stazione di cambio verso destinazione
+                    min_part = arr_cambio_dt + timedelta(minutes=MARGINE_MIN)
+                    orario_cambio = build_orario(min_part.strftime('%H:%M'), min_part.strftime('%Y-%m-%d'))
+                    treni_b = api(f'/partenze/{staz_cambio_id}/{urllib.parse.quote(orario_cambio)}')
+                    if not treni_b or not isinstance(treni_b, list):
+                        continue
+
+                    for t2 in treni_b[:15]:
+                        dest2 = (t2.get('destinazione') or '').upper()
+                        orario_part2 = t2.get('orarioPartenza')
+                        if not orario_part2:
+                            continue
+                        # Verifica che parta dopo il margine
+                        try:
+                            part2_dt = datetime.fromtimestamp(orario_part2 / 1000)
+                        except:
+                            continue
+                        if part2_dt < min_part:
+                            continue
+
+                        # Controlla se arriva alla destinazione
+                        arriva_dest = any(k in dest2 for k in to_kw)
+                        if not arriva_dest:
+                            # Controlla nelle fermate del secondo treno
+                            cod2 = t2.get('codOrigine')
+                            num2 = t2.get('numeroTreno')
+                            if cod2 and num2 and orario_part2:
+                                ferro2 = api(f'/andamentoTreno/{cod2}/{num2}/{orario_part2}')
+                                if ferro2 and isinstance(ferro2, dict):
+                                    for f2 in ferro2.get('fermate', []):
+                                        nome2 = (f2.get('stazione') or '').upper()
+                                        if any(k in nome2 for k in to_kw):
+                                            t2['orarioArrivoDestinazione'] = f2.get('arrivo_teorico') or f2.get('programmata')
+                                            arriva_dest = True
+                                            break
+                        if arriva_dest:
+                            soluzioni.append({
+                                'tipo': 'cambio',
+                                'treno1': t,
+                                'treno2': t2,
+                                'stazioneCAMBIO': staz_cambio_nome,
+                                'oraArrCambio': arr_cambio_ms,
+                                'oraPartCambio': orario_part2,
+                                'attesaMin': int((part2_dt - arr_cambio_dt).total_seconds() / 60),
+                                'orarioPartenza': ts_ms,
+                                'orarioArrivo': t2.get('orarioArrivoDestinazione') or t2.get('orarioArrivo'),
+                            })
+                            break  # una soluzione per interscambio è sufficiente
+                return soluzioni
+
+            # Esegui in parallelo su max 8 treni
+            tutte_soluzioni = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+                futures = [ex.submit(trova_cambi, t) for t in treni_a[:8]]
+                for fut in concurrent.futures.as_completed(futures):
+                    try:
+                        sols = fut.result()
+                        tutte_soluzioni.extend(sols)
+                    except:
+                        pass
+
+            # Deduplicazione e ordinamento
+            seen_sol = set()
+            uniche = []
+            for s in tutte_soluzioni:
+                key = (s['treno1'].get('numeroTreno'), s['stazioneCAMBIO'], s['treno2'].get('numeroTreno'))
+                if key not in seen_sol:
+                    seen_sol.add(key)
+                    uniche.append(s)
+            uniche.sort(key=lambda s: s.get('orarioPartenza') or 0)
+            send_json(self, uniche[:8])
 
         elif parsed.path == '/api/treno':
             n = p('n')
