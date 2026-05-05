@@ -854,8 +854,11 @@ async function cercaTreno() {
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('SW registrato'))
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    });
+    navigator.serviceWorker.register('/sw.js?v=2')
+      .then(reg => reg.update())
       .catch(err => console.log('SW errore:', err));
   });
 }
@@ -917,12 +920,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
-        # Service Worker
+        # Service Worker - versione che non fa cache
         elif parsed.path == '/sw.js':
-            sw_code = "const CACHE='gtreni-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['/']))));self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))))); "
+            sw_code = "self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>e.respondWith(fetch(e.request)));"
             sw = sw_code.encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/javascript')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.send_header('Content-Length', len(sw))
             self.end_headers()
             self.wfile.write(sw)
