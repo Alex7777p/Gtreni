@@ -292,6 +292,13 @@ header h1 span { color: var(--accent2); }
 
 /* STATUS BADGES */
 .sbadge { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+.btn-fermate { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 4px 10px; font-size: 0.72rem; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.btn-fermate:hover { border-color: var(--accent); color: var(--accent); }
+.fermate-stop { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.82rem; }
+.fermate-stop .fs-time { color: var(--muted); min-width: 50px; font-size: 0.78rem; }
+.fermate-stop .fs-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+.fermate-stop.fs-highlight .fs-dot { background: var(--accent); }
+.fermate-stop.fs-highlight .fs-name { color: var(--accent); font-weight: 600; }
 .s-ok { background: rgba(34,197,94,0.15); color: var(--green); }
 .s-late { background: rgba(239,68,68,0.15); color: var(--red); }
 .s-grey { background: rgba(100,116,139,0.15); color: var(--muted); }
@@ -589,6 +596,45 @@ function apriTrenitalia(auto) {
 }
 
 // CERCA VIAGGIO
+const _fermateCache = {};
+async function toggleFermate(idx, codOrigine, num, ts) {
+  const panel = document.getElementById(`fermate-v-${idx}`);
+  if (!panel) return;
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const cacheKey = `${codOrigine}-${num}-${ts}`;
+  if (_fermateCache[cacheKey]) { renderFermate(panel, _fermateCache[cacheKey]); return; }
+  panel.innerHTML = '<div style="font-size:0.8rem;color:var(--muted);padding:4px 0">⏳ Caricamento fermate...</div>';
+  try {
+    const r = await fetch(`/api/fermate?cod=${encodeURIComponent(codOrigine)}&num=${num}&ts=${ts}`);
+    const data = await r.json();
+    _fermateCache[cacheKey] = data;
+    renderFermate(panel, data);
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#f87171;font-size:0.8rem">❌ Errore caricamento fermate</div>';
+  }
+}
+
+function renderFermate(panel, data) {
+  if (!data || !data.fermate || !data.fermate.length) {
+    panel.innerHTML = '<div style="font-size:0.8rem;color:var(--muted)">Nessuna fermata disponibile</div>';
+    return;
+  }
+  const rows = data.fermate.map(f => {
+    const nome = f.stazione || '–';
+    const orario = f.programmataArrivo ? fmt(f.programmataArrivo) : (f.programmataPartenza ? fmt(f.programmataPartenza) : '–');
+    const ritardo = f.ritardoArrivo || f.ritardoPartenza || 0;
+    const ritardoHtml = ritardo > 0 ? `<span style="color:#f87171;font-size:0.72rem">+${ritardo}'</span>` : '';
+    return `<div class="fermate-stop">
+      <span class="fs-dot"></span>
+      <span class="fs-time">${orario}</span>
+      <span class="fs-name">${nome}</span>
+      ${ritardoHtml}
+    </div>`;
+  }).join('');
+  panel.innerHTML = rows;
+}
+
 async function cercaViaggio() {
   const fromId = document.getElementById('v-from-id').value;
   const toId = document.getElementById('v-to-id').value;
@@ -611,29 +657,40 @@ async function cercaViaggio() {
     const mostraCambio = diretti.length === 0 && conCambio.length > 0;
     const lista = diretti.length > 0 ? diretti : data;
 
-    const htmlTreno = t => {
-      const durStr = t.durataMinuti ? fmtDur(t.durataMinuti) : '';
-      const cambiStr = t.cambi > 0 ? `<span class="cambio-badge">🔄 ${t.cambi} cambio${t.cambi>1?'i':''}</span>` : '<span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>';
+    const htmlTreno = (t, idx) => {
+      const arrDest = t.orarioArrivoDestinazione ? fmt(t.orarioArrivoDestinazione) : (t.orarioArrivo ? fmt(t.orarioArrivo) : null);
+      const fmtNum = (n) => n != null ? String(n).padStart(2,'0') : null;
+      const fromTime = t.orarioPartenza ? new Date(t.orarioPartenza) : null;
+      const toTime = t.orarioArrivoDestinazione ? new Date(t.orarioArrivoDestinazione) : (t.orarioArrivo ? new Date(t.orarioArrivo) : null);
+      let durStr = '';
+      if (fromTime && toTime) {
+        const diffMin = Math.round((toTime - fromTime) / 60000);
+        if (diffMin > 0) durStr = fmtDur(diffMin);
+      }
       return `
-        <div class="train-card">
+        <div class="train-card" id="card-v-${idx}">
           <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno||'–'}</div>
           <div class="train-info">
             <div class="train-dest">→ ${t.destinazione||'–'}</div>
             <div class="train-sub">
-              Partenza: <b>${fmt(t.orarioPartenza)}</b>
-              ${t.orarioArrivo ? `· Arrivo: <b>${fmt(t.orarioArrivo)}</b>` : ''}
-              ${durStr ? `· ${durStr}` : ''}
+              🕐 Partenza: <b>${fmt(t.orarioPartenza)}</b>
+              ${arrDest ? `&nbsp;→&nbsp;Arrivo: <b>${arrDest}</b>` : ''}
+              ${durStr ? `&nbsp;·&nbsp;<span style="color:var(--accent)">${durStr}</span>` : ''}
             </div>
           </div>
-          ${cambiStr}
+          <span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>
           ${delayHtml(t.ritardo)}
           <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
+          <button class="btn-fermate" onclick="toggleFermate(${idx}, '${t.codOrigine||''}', ${t.numeroTreno||0}, ${t.orarioPartenza||0})">🛑 Fermate</button>
+          <div class="fermate-panel" id="fermate-v-${idx}" style="display:none;width:100%;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            <div class="fermate-loading">Caricamento fermate...</div>
+          </div>
         </div>`;
     };
 
     res.innerHTML = `
       ${diretti.length > 0 ? `<div class="section-label" style="margin-bottom:8px">✅ Treni diretti (${diretti.length})</div>` : ''}
-      <div class="train-list">${lista.map(htmlTreno).join('')}</div>
+      <div class="train-list">${lista.map((t,i) => htmlTreno(t,i)).join('')}</div>
       ${mostraCambio ? `<div style="margin-top:6px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.83rem;color:#fbbf24">⚠️ Nessun treno diretto trovato — mostrate soluzioni con cambio</div>` : ''}
     `;
   } catch(e) {
@@ -916,7 +973,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             seen.add(key)
                             tutti.append(t)
 
-            print(f"[DEBUG] from_id={from_id} to_nome={to_nome} from_nome={p('from-nome')} tutti={len(tutti)}", flush=True)
 
             if not tutti:
                 send_json(self, [])
@@ -933,19 +989,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     da_controllare.append(t)
 
-            print(f"[DEBUG] keywords={keywords} diretti_veloci={len(diretti_veloci)} da_controllare={len(da_controllare)}", flush=True)
 
             # Per i treni non diretti, controlla le fermate in parallelo
             def check_fermate(t):
                 num = t.get('numeroTreno')
                 cod_staz = t.get('codOrigine')  # formato S0XXXX richiesto da /fermate
                 ts_ms = t.get('orarioPartenza')
-                print(f"[DEBUG] check_fermate num={num} cod_staz={cod_staz} ts_ms={ts_ms}", flush=True)
                 if not num or not ts_ms or not cod_staz:
-                    print(f"[DEBUG] check_fermate SKIP: dati mancanti", flush=True)
                     return None
                 fermate_data = api(f'/andamentoTreno/{cod_staz}/{num}/{ts_ms}')
-                print(f"[DEBUG] fermate risposta tipo={type(fermate_data)} val={str(fermate_data)[:200]}", flush=True)
                 # L'API può rispondere con stringa JSON o lista
                 # andamentoTreno risponde con dict, le fermate sono in ['fermate']
                 if isinstance(fermate_data, dict):
@@ -953,12 +1005,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 elif isinstance(fermate_data, list):
                     fermate_list = fermate_data
                 else:
-                    print(f"[DEBUG] fermate: risposta inattesa {type(fermate_data)}", flush=True)
                     return None
                 if not fermate_list:
                     return None
                 stazioni = [(f.get('stazione') or '').upper() for f in fermate_list]
-                print(f"[DEBUG] stazioni={stazioni[:5]}", flush=True)
                 orig_upper = (t.get('origine') or '').upper()
                 orig_kw = [w for w in orig_upper.split() if len(w) > 3]
                 # Trova indice stazione di partenza nel percorso
@@ -1023,6 +1073,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 send_json(self, {'error': 'Nessun treno diretto trovato tra queste stazioni. Usa il tasto Cerca su Trenitalia per soluzioni con cambio.'})
 
         # Stato treno
+        elif parsed.path == '/api/fermate':
+            cod = p('cod')
+            num = p('num')
+            ts = p('ts')
+            if not cod or not num or not ts:
+                send_json(self, {'error': 'Parametri mancanti'})
+                return
+            data = api(f'/andamentoTreno/{cod}/{num}/{ts}')
+            if not data or not isinstance(data, dict):
+                send_json(self, {'fermate': []})
+                return
+            send_json(self, {'fermate': data.get('fermate', [])})
+
         elif parsed.path == '/api/treno':
             n = p('n')
             cerca = api(f'/cercaNumeroTrenoTrenoAutocomplete/{urllib.parse.quote(n)}')
