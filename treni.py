@@ -626,7 +626,7 @@ async function cercaViaggio() {
     const lista = diretti.length > 0 ? diretti : data;
 
     const htmlTreno = (t, idx) => {
-      const arrDest = t.orarioArrivoDestinazione ? fmt(t.orarioArrivoDestinazione) : (t.orarioArrivo ? fmt(t.orarioArrivo) : null);
+      const arrDest = t.orarioArrivoDestinazione ? fmt(t.orarioArrivoDestinazione) : (t.orarioArrivo ? fmt(t.orarioArrivo) : (t.compOrarioArrivo ? t.compOrarioArrivo : null));
       const fmtNum = (n) => n != null ? String(n).padStart(2,'0') : null;
       const fromTime = t.orarioPartenza ? new Date(t.orarioPartenza) : null;
       const toTime = t.orarioArrivoDestinazione ? new Date(t.orarioArrivoDestinazione) : (t.orarioArrivo ? new Date(t.orarioArrivo) : null);
@@ -1022,7 +1022,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             da_controllare = []
             for t in tutti[:20]:
                 dest = (t.get('destinazione') or '').upper()
-                if any(k in dest for k in keywords) or to_nome in dest:
+                # Match preciso: tutti i keywords devono essere presenti
+                if (all(k in dest for k in keywords) and keywords) or to_nome in dest:
                     diretti_veloci.append(t)
                 else:
                     da_controllare.append(t)
