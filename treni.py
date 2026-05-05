@@ -750,7 +750,6 @@ async function cercaCambi() {
       return;
     }
     res.innerHTML = `<div class="train-list">${data.map((s,i) => htmlCambio(s,i,toNome)).join("")}</div>`;
-    `;
   } catch(e) {
     res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
   }
