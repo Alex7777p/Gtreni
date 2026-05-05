@@ -542,7 +542,10 @@ function delayHtml(r) {
   return `<span class="delay-late">+${r} min</span>`;
 }
 
-// APRI TRENITALIA
+function apriLefrecce() {
+  window.open('https://www.lefrecce.it', '_blank');
+}
+
 function apriTrenitalia() {
   window.open('https://www.lefrecce.it', '_blank');
 }
@@ -699,7 +702,7 @@ async function cercaTutto() {
             '<div style="font-weight:700;font-size:0.9rem;color:#f1f5f9">' + time + '</div>' +
           '</div>' +
         '</div>' +
-        '<button onclick="window.open(\"https://www.lefrecce.it\",\"_blank\")" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:white;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">🌐 Apri lefrecce.it →</button>' +
+        '<button onclick="apriLefrecce()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:white;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600">🌐 Apri lefrecce.it →</button>' +
       '</div>';
     }
 
@@ -874,15 +877,12 @@ async function cercaTreno() {
 }
 </script>
 <script>
+// Rimuovi tutti i service worker esistenti
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(r => r.unregister());
-    });
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => reg.update())
-      .catch(err => console.log('SW errore:', err));
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => { r.unregister(); console.log('SW rimosso'); });
   });
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
 }
 </script>
 </body>
