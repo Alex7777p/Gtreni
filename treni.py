@@ -600,7 +600,8 @@ async function cercaViaggio() {
   res.innerHTML = '<div class="loading">🔍 Ricerca soluzioni...</div>';
   try {
     const toNome = document.getElementById('v-to').value.trim();
-    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
+    const fromNome = document.getElementById('v-from').value.trim();
+    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
     const data = await r.json();
     if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
     if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🔍</div>Nessuna soluzione trovata</div>'; return; }
@@ -962,7 +963,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             risultati = diretti_veloci + trovati_fermate
             risultati.sort(key=lambda t: t.get('orarioPartenza') or 0)
-            send_json(self, risultati[:15] if risultati else tutti[:15])
+
+            # Se non trovato nulla, prova con arrivi alla stazione dest e filtra per origine
+            if not risultati and p('to'):
+                to_id = p('to')
+                from_nome = p('from-nome').upper().strip()
+                from_kw = [w for w in from_nome.split() if len(w) > 3]
+                arrivi_trovati = []
+                seen_arr = set()
+                for delta_h in [0, 2, 4]:
+                    dt2 = base_dt + timedelta(hours=delta_h)
+                    orario2 = build_orario(dt2.strftime('%H:%M'), dt2.strftime('%Y-%m-%d'))
+                    arr = api(f'/arrivi/{to_id}/{urllib.parse.quote(orario2)}')
+                    if arr and isinstance(arr, list):
+                        for t in arr:
+                            key = t.get('numeroTreno')
+                            orig = (t.get('origine') or '').upper()
+                            if key and key not in seen_arr:
+                                if any(k in orig for k in from_kw) or from_nome in orig:
+                                    seen_arr.add(key)
+                                    arrivi_trovati.append(t)
+                arrivi_trovati.sort(key=lambda t: t.get('orarioArrivo') or 0)
+                send_json(self, arrivi_trovati[:15] if arrivi_trovati else tutti[:15])
+            else:
+                send_json(self, risultati[:15] if risultati else tutti[:15])
 
         # Stato treno
         elif parsed.path == '/api/treno':
