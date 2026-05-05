@@ -360,8 +360,7 @@ header h1 span { color: var(--accent2); }
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn" onclick="cercaViaggio()">🔍 Cerca treni diretti</button>
-        <button class="btn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);margin-left:10px" onclick="cercaCambi()">🔄 Cerca con cambi</button>
+        <button class="btn" onclick="cercaTutto()">🔍 Cerca</button>
       </div>
     </div>
     <div id="res-v"></div>
@@ -563,7 +562,131 @@ function reverseViaggio() {
 }
 
 // CERCA VIAGGIO
+// Funzioni globali per rendering card
+function htmlTreno(t, idx, toNome) {
+  const arrDest = t.orarioArrivoDestinazione ? fmt(t.orarioArrivoDestinazione) : (t.orarioArrivo ? fmt(t.orarioArrivo) : (t.compOrarioArrivo ? t.compOrarioArrivo : null));
+  const fromTime = t.orarioPartenza ? new Date(t.orarioPartenza) : null;
+  const toTime = t.orarioArrivoDestinazione ? new Date(t.orarioArrivoDestinazione) : (t.orarioArrivo ? new Date(t.orarioArrivo) : null);
+  let durStr = '';
+  if (fromTime && toTime) {
+    const diffMin = Math.round((toTime - fromTime) / 60000);
+    if (diffMin > 0) durStr = fmtDur(diffMin);
+  }
+  const codOrig = (t.codOrigine||'').replace(/'/g,"");
+  return `
+    <div class="train-card" id="card-v-${idx}">
+      <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno||'–'}</div>
+      <div class="train-info">
+        <div class="train-dest">→ ${t.destinazione||'–'}</div>
+        <div class="train-sub">
+          🕐 Partenza: <b>${fmt(t.orarioPartenza)}</b>
+          ${arrDest ? `&nbsp;→&nbsp;<b>${toNome}</b>: <b>${arrDest}</b>` : ''}
+          ${durStr ? `&nbsp;·&nbsp;<span style="color:var(--accent)">${durStr}</span>` : ''}
+        </div>
+      </div>
+      <span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>
+      ${delayHtml(t.ritardo)}
+      <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
+      <button class="btn-fermate" onclick="toggleFermate(${idx}, '${codOrig}', ${t.numeroTreno||0}, ${t.orarioPartenza||0})">🛑 Fermate</button>
+      <div class="fermate-panel" id="fermate-v-${idx}" style="display:none;width:100%;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <div class="fermate-loading">Caricamento fermate...</div>
+      </div>
+    </div>`;
+}
+
+function htmlCambio(s, idx, toNome) {
+  const t1 = s.treno1;
+  const t2 = s.treno2;
+  const partStr = fmt(s.orarioPartenza);
+  const arrStr = s.orarioArrivo ? fmt(s.orarioArrivo) : '–';
+  const arrCambio = fmt(s.oraArrCambio);
+  const partCambio = fmt(s.oraPartCambio);
+  const attesa = s.attesaMin;
+  let durTot = '';
+  if (s.orarioPartenza && s.orarioArrivo) {
+    const diffMin = Math.round((s.orarioArrivo - s.orarioPartenza) / 60000);
+    if (diffMin > 0) durTot = fmtDur(diffMin);
+  }
+  return `
+    <div class="train-card" style="flex-direction:column;align-items:flex-start;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px;width:100%;flex-wrap:wrap">
+        <span class="sbadge" style="background:#2d1b69;color:#a78bfa;border:1px solid #7c3aed;font-size:0.72rem">🔄 1 cambio</span>
+        <span style="font-size:0.82rem;color:var(--muted)">Partenza: <b style="color:var(--text)">${partStr}</b></span>
+        ${arrStr !== '–' ? `<span style="font-size:0.82rem;color:var(--muted)">→ <b style="color:var(--text)">${toNome}</b>: <b style="color:var(--text)">${arrStr}</b></span>` : ''}
+        ${durTot ? `<span style="color:var(--accent);font-size:0.82rem">· ${durTot}</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:stretch;gap:0;width:100%">
+        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
+          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
+          <div style="font-size:0.85rem;font-weight:600">${partStr} → ${arrCambio}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t1.destinazione||'–'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+          <div style="font-size:0.7rem;color:#a78bfa;font-weight:600">CAMBIO</div>
+          <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap;text-align:center">${s.stazioneCAMBIO.split(' ').slice(0,2).join(' ')}</div>
+          <div style="font-size:0.7rem;color:var(--muted)">${attesa} min</div>
+        </div>
+        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:10px 14px;border:1px solid var(--border)">
+          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
+          <div style="font-size:0.85rem;font-weight:600">${partCambio} → ${arrStr}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t2.destinazione||toNome}</div>
+        </div>
+      </div>
+      ${(t1.ritardo > 0 || t2.ritardo > 0) ? `<div style="font-size:0.75rem;color:#f87171">⚠️ Ritardi in corso — verifica la connessione al cambio</div>` : ''}
+    </div>`;
+}
+
 const _fermateCache = {};
+
+async function cercaTutto() {
+  const fromId = document.getElementById('v-from-id').value;
+  const toId = document.getElementById('v-to-id').value;
+  const date = document.getElementById('v-date').value;
+  const time = document.getElementById('v-time').value;
+  const res = document.getElementById('res-v');
+  if (!fromId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di partenza dalla lista</div>'; return; }
+  if (!toId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di arrivo dalla lista</div>'; return; }
+  const toNome = document.getElementById('v-to').value.trim();
+  const fromNome = document.getElementById('v-from').value.trim();
+  res.innerHTML = '<div class="loading">🔍 Ricerca in corso...</div>';
+
+  const params = `from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`;
+
+  try {
+    // Lancia diretti e cambi in parallelo
+    const [rDiretti, rCambi] = await Promise.all([
+      fetch(`/api/viaggio?${params}`),
+      fetch(`/api/cambi?${params}`)
+    ]);
+    const [diretti, cambi] = await Promise.all([rDiretti.json(), rCambi.json()]);
+
+    let html = '';
+
+    // Sezione diretti
+    const listaDiretti = Array.isArray(diretti) ? diretti : [];
+    if (listaDiretti.length > 0) {
+      html += `<div class="section-label" style="margin-bottom:8px;font-size:0.82rem;color:var(--muted)">🚄 Treni diretti (${listaDiretti.length})</div>`;
+      html += `<div class="train-list">${listaDiretti.map((t,i) => htmlTreno(t, i, toNome)).join('')}</div>`;
+    } else {
+      html += '<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;font-size:0.83rem;color:#f87171;margin-bottom:12px">❌ Nessun treno diretto trovato</div>';
+    }
+
+    // Sezione cambi
+    const listaCambi = Array.isArray(cambi) ? cambi : [];
+    html += `<div class="section-label" style="margin:16px 0 8px;font-size:0.82rem;color:var(--muted)">🔄 Soluzioni con cambio (${listaCambi.length})</div>`;
+    if (listaCambi.length > 0) {
+      html += `<div class="train-list">${listaCambi.map((s,i) => htmlCambio(s, i, toNome)).join('')}</div>`;
+    } else {
+      html += '<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;font-size:0.83rem;color:#f87171">❌ Nessuna soluzione con cambio trovata</div>';
+    }
+
+    res.innerHTML = html;
+  } catch(e) {
+    res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
+  }
+}
+
+
 async function toggleFermate(idx, codOrigine, num, ts) {
   const panel = document.getElementById(`fermate-v-${idx}`);
   if (!panel) return;
@@ -625,42 +748,7 @@ async function cercaViaggio() {
     const mostraCambio = diretti.length === 0 && conCambio.length > 0;
     const lista = diretti.length > 0 ? diretti : data;
 
-    const htmlTreno = (t, idx) => {
-      const arrDest = t.orarioArrivoDestinazione ? fmt(t.orarioArrivoDestinazione) : (t.orarioArrivo ? fmt(t.orarioArrivo) : (t.compOrarioArrivo ? t.compOrarioArrivo : null));
-      const fmtNum = (n) => n != null ? String(n).padStart(2,'0') : null;
-      const fromTime = t.orarioPartenza ? new Date(t.orarioPartenza) : null;
-      const toTime = t.orarioArrivoDestinazione ? new Date(t.orarioArrivoDestinazione) : (t.orarioArrivo ? new Date(t.orarioArrivo) : null);
-      let durStr = '';
-      if (fromTime && toTime) {
-        const diffMin = Math.round((toTime - fromTime) / 60000);
-        if (diffMin > 0) durStr = fmtDur(diffMin);
-      }
-      return `
-        <div class="train-card" id="card-v-${idx}">
-          <div class="train-badge">${t.categoria||''}<br>${t.numeroTreno||'–'}</div>
-          <div class="train-info">
-            <div class="train-dest">→ ${t.destinazione||'–'}</div>
-            <div class="train-sub">
-              🕐 Partenza: <b>${fmt(t.orarioPartenza)}</b>
-              ${arrDest ? `&nbsp;→&nbsp;<b>${toNome}</b>: <b>${arrDest}</b>` : ''}
-              ${durStr ? `&nbsp;·&nbsp;<span style="color:var(--accent)">${durStr}</span>` : ''}
-            </div>
-          </div>
-          <span class="sbadge s-ok" style="font-size:0.72rem">Diretto</span>
-          ${delayHtml(t.ritardo)}
-          <div class="track-box"><div class="track-lbl">Bin.</div><div class="track-num">${t.binarioProgrammatoPartenzaDescrizione||'–'}</div></div>
-          <button class="btn-fermate" onclick="toggleFermate(${idx}, '${t.codOrigine||''}', ${t.numeroTreno||0}, ${t.orarioPartenza||0})">🛑 Fermate</button>
-          <div class="fermate-panel" id="fermate-v-${idx}" style="display:none;width:100%;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-            <div class="fermate-loading">Caricamento fermate...</div>
-          </div>
-        </div>`;
-    };
-
-    res.innerHTML = `
-      ${diretti.length > 0 ? `<div class="section-label" style="margin-bottom:8px">✅ Treni diretti (${diretti.length})</div>` : ''}
-      <div class="train-list">${lista.map((t,i) => htmlTreno(t,i)).join('')}</div>
-      ${mostraCambio ? `<div style="margin-top:6px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.83rem;color:#fbbf24">⚠️ Nessun treno diretto trovato — mostrate soluzioni con cambio</div>` : ''}
-    `;
+    res.innerHTML = `<div class="train-list">${data.map((t,i) => htmlTreno(t,i,toNome)).join('')}</div>`;
   } catch(e) {
     res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
   }
@@ -685,51 +773,7 @@ async function cercaCambi() {
       res.innerHTML = `<div class="error-box">❌ Nessuna soluzione con cambio trovata. Prova ad allargare l'orario di ricerca.</div>`;
       return;
     }
-    const htmlCambio = (s, idx) => {
-      const t1 = s.treno1;
-      const t2 = s.treno2;
-      const partStr = fmt(s.orarioPartenza);
-      const arrStr = s.orarioArrivo ? fmt(s.orarioArrivo) : '–';
-      const arrCambio = fmt(s.oraArrCambio);
-      const partCambio = fmt(s.oraPartCambio);
-      const attesa = s.attesaMin;
-      let durTot = '';
-      if (s.orarioPartenza && s.orarioArrivo) {
-        const diffMin = Math.round((s.orarioArrivo - s.orarioPartenza) / 60000);
-        if (diffMin > 0) durTot = fmtDur(diffMin);
-      }
-      return `
-        <div class="train-card" style="flex-direction:column;align-items:flex-start;gap:10px">
-          <div style="display:flex;align-items:center;gap:8px;width:100%">
-            <span class="sbadge" style="background:#2d1b69;color:#a78bfa;border:1px solid #7c3aed;font-size:0.72rem">🔄 1 cambio</span>
-            <span style="font-size:0.82rem;color:var(--muted)">Partenza: <b style="color:var(--text)">${partStr}</b></span>
-            ${arrStr !== '–' ? `<span style="font-size:0.82rem;color:var(--muted)">→ Arrivo: <b style="color:var(--text)">${arrStr}</b></span>` : ''}
-            ${durTot ? `<span style="color:var(--accent);font-size:0.82rem">· ${durTot}</span>` : ''}
-          </div>
-          <div style="display:flex;align-items:stretch;gap:0;width:100%">
-            <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
-              <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
-              <div style="font-size:0.85rem;font-weight:600">${partStr} → ${arrCambio}</div>
-              <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t1.destinazione||'–'}</div>
-            </div>
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
-              <div style="font-size:0.7rem;color:#a78bfa;font-weight:600">CAMBIO</div>
-              <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap">${s.stazioneCAMBIO.split(' ').slice(0,2).join(' ')}</div>
-              <div style="font-size:0.7rem;color:var(--muted)">attesa ${attesa} min</div>
-            </div>
-            <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:10px 14px;border:1px solid var(--border)">
-              <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
-              <div style="font-size:0.85rem;font-weight:600">${partCambio} → ${arrStr}</div>
-              <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t2.destinazione||toNome}</div>
-            </div>
-          </div>
-          ${(t1.ritardo > 0 || t2.ritardo > 0) ? `<div style="font-size:0.75rem;color:#f87171">⚠️ Attenzione: ritardi in corso — verifica la connessione al cambio</div>` : ''}
-        </div>`;
-    };
-
-    res.innerHTML = `
-      <div style="margin-bottom:8px;font-size:0.82rem;color:var(--muted)">🔄 Soluzioni con cambio trovate: <b style="color:var(--text)">${data.length}</b></div>
-      <div class="train-list">${data.map((s,i) => htmlCambio(s,i)).join('')}</div>
+    res.innerHTML = `<div class="train-list">${data.map((s,i) => htmlCambio(s,i,toNome)).join("")}</div>`;
     `;
   } catch(e) {
     res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
