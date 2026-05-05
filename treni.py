@@ -682,7 +682,7 @@ async function cercaCambi() {
     const r = await fetch(`/api/cambi?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
     const data = await r.json();
     if (!data || !data.length) {
-      res.innerHTML = '<div class="error-box">❌ Nessuna soluzione con cambio trovata. Prova ad allargare l'orario di ricerca.</div>';
+      res.innerHTML = `<div class="error-box">❌ Nessuna soluzione con cambio trovata. Prova ad allargare l'orario di ricerca.</div>`;
       return;
     }
     const htmlCambio = (s, idx) => {
