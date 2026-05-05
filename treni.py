@@ -714,7 +714,7 @@ function renderFermate(panel, data) {
     const nome = f.stazione || '–';
     const orario = f.programmata ? fmt(f.programmata) : (f.effettiva ? fmt(f.effettiva) : '–');
     const ritardo = f.ritardoArrivo || f.ritardoPartenza || 0;
-    const ritardoHtml = ritardo > 0 ? `<span style="color:#f87171;font-size:0.72rem">+${ritardo}'</span>` : '';
+    const ritardoHtml = ritardo > 0 ? "<span style=\"color:#f87171;font-size:0.72rem\">+" + ritardo + " min</span>" : "";
     return `<div class="fermate-stop">
       <span class="fs-dot"></span>
       <span class="fs-time">${orario}</span>
