@@ -726,32 +726,8 @@ function renderFermate(panel, data) {
 }
 
 async function cercaViaggio() {
-  const fromId = document.getElementById('v-from-id').value;
-  const toId = document.getElementById('v-to-id').value;
-  const date = document.getElementById('v-date').value;
-  const time = document.getElementById('v-time').value;
-  const res = document.getElementById('res-v');
-  if (!fromId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di partenza dalla lista</div>'; return; }
-  if (!toId) { res.innerHTML = '<div class="error-box">⚠️ Seleziona la stazione di arrivo dalla lista</div>'; return; }
-  res.innerHTML = '<div class="loading">🔍 Ricerca soluzioni...</div>';
-  try {
-    const toNome = document.getElementById('v-to').value.trim();
-    const fromNome = document.getElementById('v-from').value.trim();
-    const toDisplay = toNome; // nome stazione arrivo da mostrare
-    const r = await fetch(`/api/viaggio?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&to-nome=${encodeURIComponent(toNome)}&from-nome=${encodeURIComponent(fromNome)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`);
-    const data = await r.json();
-    if (data.error) { res.innerHTML = `<div class="error-box">❌ ${data.error}</div>`; return; }
-    if (!data.length) { res.innerHTML = '<div class="empty-box"><div class="ico">🔍</div>Nessuna soluzione trovata</div>'; return; }
-    // Separa diretti da quelli con cambio
-    const diretti = data.filter(t => t.soluzioneType === 'diretto');
-    const conCambio = data.filter(t => t.soluzioneType === 'cambio');
-    const mostraCambio = diretti.length === 0 && conCambio.length > 0;
-    const lista = diretti.length > 0 ? diretti : data;
-
-    res.innerHTML = `<div class="train-list">${data.map((t,i) => htmlTreno(t,i,toNome)).join('')}</div>`;
-  } catch(e) {
-    res.innerHTML = '<div class="error-box">❌ Errore nella ricerca. Riprova.</div>';
-  }
+  // Mantenuto per compatibilita - usa cercaTutto
+  cercaTutto();
 }
 
 // CAMBI
