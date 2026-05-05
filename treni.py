@@ -622,7 +622,7 @@ function renderFermate(panel, data) {
   }
   const rows = data.fermate.map(f => {
     const nome = f.stazione || '–';
-    const orario = f.programmataArrivo ? fmt(f.programmataArrivo) : (f.programmataPartenza ? fmt(f.programmataPartenza) : '–');
+    const orario = f.programmata ? fmt(f.programmata) : (f.effettiva ? fmt(f.effettiva) : '–');
     const ritardo = f.ritardoArrivo || f.ritardoPartenza || 0;
     const ritardoHtml = ritardo > 0 ? `<span style="color:#f87171;font-size:0.72rem">+${ritardo}'</span>` : '';
     return `<div class="fermate-stop">
@@ -1021,7 +1021,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for f in fermate_list[idx_from:]:
                     nome_f = (f.get('stazione') or '').upper()
                     if any(k in nome_f for k in keywords):
-                        t['orarioArrivoDestinazione'] = f.get('programmataArrivo') or f.get('effettivaArrivo')
+                        t['orarioArrivoDestinazione'] = f.get('programmata') or f.get('effettiva') or f.get('arrivo_teorico')
                         return t
                 return None
 
@@ -1085,9 +1085,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 send_json(self, {'fermate': []})
                 return
             fermate = data.get('fermate', [])
-            if fermate:
-                print(f"[FIELDS] prima fermata keys: {list(fermate[0].keys())}", flush=True)
-                print(f"[FIELDS] prima fermata: {fermate[0]}", flush=True)
             send_json(self, {'fermate': fermate})
 
         elif parsed.path == '/api/treno':
