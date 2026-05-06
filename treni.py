@@ -947,6 +947,12 @@ def build_orario(ora_str, date_str=None):
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args): pass
 
+    def do_HEAD(self):
+        # Risponde alle richieste HEAD (usate da UptimeRobot per monitoraggio)
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
