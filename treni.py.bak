@@ -1357,25 +1357,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except:
                     return sols
                 min_dt = arr_dt + timedelta(minutes=MARGINE_MIN)
-                orario2 = build_orario(min_dt.strftime('%H:%M'), min_dt.strftime('%Y-%m-%d'))
-                tb = api(f'/partenze/{sid}/{urllib.parse.quote(orario2)}')
-                if not tb or not isinstance(tb, list):
-                    return sols
-                print(f"[INT] {snome} trovati {len(tb)} treni, min_dt={min_dt}", flush=True)
-                for t2 in tb[:20]:
+
+                # Prova piu fasce orarie per trovare treni dopo min_dt
+                tb_all = []
+                seen_t = set()
+                for dh in [0, 1, 2, 3, 4]:
+                    dt_try = min_dt + timedelta(hours=dh)
+                    orario2 = build_orario(dt_try.strftime('%H:%M'), dt_try.strftime('%Y-%m-%d'))
+                    tb = api(f'/partenze/{sid}/{urllib.parse.quote(orario2)}')
+                    if tb and isinstance(tb, list):
+                        for tx in tb:
+                            k = tx.get('numeroTreno')
+                            if k and k not in seen_t:
+                                seen_t.add(k)
+                                tb_all.append(tx)
+
+                print(f"[INT] {snome} trovati {len(tb_all)} treni totali, min_dt={min_dt}", flush=True)
+
+                for t2 in tb_all:
                     dest2 = (t2.get('destinazione') or '').upper()
                     op2 = (t2.get('orarioPartenza') or
                            t2.get('millisDataPartenza') or
                            t2.get('dataPartenzaTreno'))
-                    print(f"[INT2] {t2.get('numeroTreno')} dest={dest2} op2={op2}", flush=True)
                     if not op2:
                         continue
                     try:
                         p2_dt = datetime.fromtimestamp(op2 / 1000)
-                    except Exception as e:
-                        print(f"[INT2] err timestamp {e}", flush=True)
+                    except:
                         continue
-                    print(f"[INT2] p2_dt={p2_dt} min_dt={min_dt} pass={p2_dt >= min_dt}", flush=True)
+                    # Filtra: deve partire dopo min_dt
                     if p2_dt < min_dt:
                         continue
                     ok = _match(dest2, to_kw, to_nome)
@@ -1393,7 +1403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         ok = True
                                         break
                     if ok:
-                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')}", flush=True)
+                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} alle {p2_dt}", flush=True)
                         sols.append({
                             'tipo': 'cambio', 'treno1': t1, 'treno2': t2,
                             'stazioneCAMBIO': snome, 'oraArrCambio': arr_ms,
@@ -1426,7 +1436,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             # Cerca cambi in sequenza
             tutte = []
-            for t in treni_a[:10]:
+            for t in treni_a[:8]:
                 num  = t.get('numeroTreno')
                 ts   = t.get('orarioPartenza')
                 dest = (t.get('destinazione') or '').upper()
@@ -1434,16 +1444,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     continue
                 print(f"[TRENO] {num} dest={dest}", flush=True)
 
-                # Strategia 1: usa destinazione come interscambio
                 sid, snome = _get_int(dest)
                 if sid and sid != from_id and sid != to_id:
                     arr = t.get('orarioArrivo') or ts
                     tutte.extend(_cerca_int(sid, snome, arr, t))
 
-                if len(tutte) >= 5:
+                if len(tutte) >= 3:
                     break
 
-                # Strategia 2: cerca nelle fermate
                 cod = t.get('codOrigine')
                 if cod:
                     fd = api(f'/andamentoTreno/{cod}/{num}/{ts}')
@@ -1468,7 +1476,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             if not am:
                                 continue
                             tutte.extend(_cerca_int(si2, sn2, am, t))
-                            if len(tutte) >= 5:
+                            if len(tutte) >= 3:
                                 break
 
             # Deduplicazione

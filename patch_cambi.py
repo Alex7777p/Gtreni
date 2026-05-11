@@ -1,5 +1,5 @@
 """
-Patch script v2 - fix filtro orario in _cerca_int
+Patch script v3 - fix destinazione sbagliata
 """
 import os, sys, ast
 
@@ -59,12 +59,16 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
 
             to_kw = [w for w in to_nome.split() if len(w) > 3]
 
-            def _match(dest, kws, nome):
-                d = dest.upper()
-                if nome in d or d in nome:
+            def _match_strict(dest, nome_completo):
+                \"\"\"Match rigoroso: la destinazione deve contenere tutte le parole significative.\"\"\"
+                d = dest.upper().strip()
+                n = nome_completo.upper().strip()
+                # Match esatto o contenimento
+                if n == d or n in d or d in n:
                     return True
-                parts = d.split()
-                return bool(kws) and all(k in parts or k in d for k in kws)
+                # Tutte le parole significative devono essere presenti
+                parole = [w for w in n.split() if len(w) > 3]
+                return bool(parole) and all(w in d for w in parole)
 
             def _get_int(nome_dest):
                 nd = nome_dest.upper()
@@ -85,7 +89,7 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                     return sols
                 min_dt = arr_dt + timedelta(minutes=MARGINE_MIN)
 
-                # Prova piu fasce orarie per trovare treni dopo min_dt
+                # Prova piu fasce orarie
                 tb_all = []
                 seen_t = set()
                 for dh in [0, 1, 2, 3, 4]:
@@ -112,25 +116,31 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                         p2_dt = datetime.fromtimestamp(op2 / 1000)
                     except:
                         continue
-                    # Filtra: deve partire dopo min_dt
                     if p2_dt < min_dt:
                         continue
-                    ok = _match(dest2, to_kw, to_nome)
+
+                    # Match rigoroso sulla destinazione finale
+                    ok = _match_strict(dest2, to_nome)
                     arr_d = t2.get('orarioArrivo')
+
                     if not ok:
+                        # Verifica nelle fermate solo se la destinazione e plausibile
+                        # (evita di controllare treni che vanno nella direzione opposta)
                         c2 = t2.get('codOrigine')
                         n2 = t2.get('numeroTreno')
                         if c2 and n2:
                             f2d = api(f'/andamentoTreno/{c2}/{n2}/{op2}')
                             if f2d and isinstance(f2d, dict):
-                                for fm in f2d.get('fermate', []):
+                                fermate = f2d.get('fermate', [])
+                                for fm in fermate:
                                     nf = (fm.get('stazione') or '').upper()
-                                    if _match(nf, to_kw, to_nome):
+                                    if _match_strict(nf, to_nome):
                                         arr_d = fm.get('arrivo_teorico') or fm.get('programmata')
                                         ok = True
                                         break
+
                     if ok:
-                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} alle {p2_dt}", flush=True)
+                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} dest={dest2}", flush=True)
                         sols.append({
                             'tipo': 'cambio', 'treno1': t1, 'treno2': t2,
                             'stazioneCAMBIO': snome, 'oraArrCambio': arr_ms,
@@ -161,7 +171,6 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                 send_json(self, [])
                 return
 
-            # Cerca cambi in sequenza
             tutte = []
             for t in treni_a[:8]:
                 num  = t.get('numeroTreno')
@@ -206,7 +215,6 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                             if len(tutte) >= 3:
                                 break
 
-            # Deduplicazione
             seen_s = set()
             uniche = []
             for s in tutte:
@@ -220,12 +228,10 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
 
 """
 
-# Backup
 with open(FILENAME + '.bak', 'w', encoding='utf-8') as f:
     f.write(content)
 print("Backup creato: treni.py.bak")
 
-# Applica patch
 new_content = content[:start] + NEW_BLOCK + content[end:]
 
 try:
