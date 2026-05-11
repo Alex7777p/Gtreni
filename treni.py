@@ -1410,7 +1410,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         if c2 and n2:
                             f2d = api(f'/andamentoTreno/{c2}/{n2}/{op2}')
                             if f2d and isinstance(f2d, dict):
-                                for fm in f2d.get('fermate', []):
+                                fermate2 = f2d.get('fermate', [])
+                                # Trova indice stazione di cambio
+                                idx_cambio = -1
+                                for i, fm in enumerate(fermate2):
+                                    nf = (fm.get('stazione') or '').upper()
+                                    if _match_strict(nf, snome):
+                                        idx_cambio = i
+                                        break
+                                # Cerca destinazione SOLO nelle fermate DOPO il cambio
+                                for fm in fermate2[idx_cambio + 1:]:
                                     nf = (fm.get('stazione') or '').upper()
                                     if _match_strict(nf, to_nome):
                                         arr_d = fm.get('arrivo_teorico') or fm.get('programmata')
