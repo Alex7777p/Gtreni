@@ -1380,7 +1380,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             seen.add(key)
                             treni_a.append(t)
 
+            print(f"[CAMBI] from={from_id} to={to_id} to_nome={to_nome} trovati {len(treni_a)} treni", flush=True)
             if not treni_a:
+                print("[CAMBI] Nessun treno trovato da stazione partenza", flush=True)
                 send_json(self, [])
                 return
 
@@ -1479,6 +1481,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 break
                 return soluzioni
 
+            print(f"[CAMBI] Elaboro {min(10, len(treni_a))} treni", flush=True)
             tutte_soluzioni = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
                 futures = [ex.submit(trova_cambi, t) for t in treni_a[:10]]
@@ -1498,6 +1501,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     seen_sol.add(key)
                     uniche.append(s)
             uniche.sort(key=lambda s: s.get('orarioPartenza') or 0)
+            print(f"[CAMBI] Soluzioni trovate: {len(uniche)}", flush=True)
             send_json(self, uniche[:8])
 
         elif parsed.path == '/api/treno':
