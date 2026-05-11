@@ -1,5 +1,5 @@
 """
-Patch script v3 - fix destinazione sbagliata
+Patch script v4 - usa orario reale di arrivo all'interscambio dalle fermate
 """
 import os, sys, ast
 
@@ -60,13 +60,10 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
             to_kw = [w for w in to_nome.split() if len(w) > 3]
 
             def _match_strict(dest, nome_completo):
-                \"\"\"Match rigoroso: la destinazione deve contenere tutte le parole significative.\"\"\"
                 d = dest.upper().strip()
                 n = nome_completo.upper().strip()
-                # Match esatto o contenimento
                 if n == d or n in d or d in n:
                     return True
-                # Tutte le parole significative devono essere presenti
                 parole = [w for w in n.split() if len(w) > 3]
                 return bool(parole) and all(w in d for w in parole)
 
@@ -81,6 +78,20 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                         return ii, ni
                 return None, None
 
+            def _get_arr_at_stop(cod, num, ts, stop_nome):
+                \"\"\"Legge le fermate del treno e restituisce l'orario di arrivo alla fermata indicata.\"\"\"
+                fd = api(f'/andamentoTreno/{cod}/{num}/{ts}')
+                if not fd or not isinstance(fd, dict):
+                    return None, None
+                fermate = fd.get('fermate', [])
+                stop_kw = [w for w in stop_nome.split() if len(w) > 3]
+                for fm in fermate:
+                    nf = (fm.get('stazione') or '').upper()
+                    if _match_strict(nf, stop_nome) or (stop_kw and all(k in nf for k in stop_kw)):
+                        arr = fm.get('arrivo_teorico') or fm.get('programmata') or fm.get('partenza_teorica')
+                        return arr, fermate
+                return None, fermate
+
             def _cerca_int(sid, snome, arr_ms, t1):
                 sols = []
                 try:
@@ -89,7 +100,6 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                     return sols
                 min_dt = arr_dt + timedelta(minutes=MARGINE_MIN)
 
-                # Prova piu fasce orarie
                 tb_all = []
                 seen_t = set()
                 for dh in [0, 1, 2, 3, 4]:
@@ -103,7 +113,7 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                                 seen_t.add(k)
                                 tb_all.append(tx)
 
-                print(f"[INT] {snome} trovati {len(tb_all)} treni totali, min_dt={min_dt}", flush=True)
+                print(f"[INT] {snome} trovati {len(tb_all)} treni, min_dt={min_dt}", flush=True)
 
                 for t2 in tb_all:
                     dest2 = (t2.get('destinazione') or '').upper()
@@ -119,28 +129,22 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                     if p2_dt < min_dt:
                         continue
 
-                    # Match rigoroso sulla destinazione finale
                     ok = _match_strict(dest2, to_nome)
                     arr_d = t2.get('orarioArrivo')
-
                     if not ok:
-                        # Verifica nelle fermate solo se la destinazione e plausibile
-                        # (evita di controllare treni che vanno nella direzione opposta)
                         c2 = t2.get('codOrigine')
                         n2 = t2.get('numeroTreno')
                         if c2 and n2:
                             f2d = api(f'/andamentoTreno/{c2}/{n2}/{op2}')
                             if f2d and isinstance(f2d, dict):
-                                fermate = f2d.get('fermate', [])
-                                for fm in fermate:
+                                for fm in f2d.get('fermate', []):
                                     nf = (fm.get('stazione') or '').upper()
                                     if _match_strict(nf, to_nome):
                                         arr_d = fm.get('arrivo_teorico') or fm.get('programmata')
                                         ok = True
                                         break
-
                     if ok:
-                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} dest={dest2}", flush=True)
+                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} dest={dest2} alle {p2_dt}", flush=True)
                         sols.append({
                             'tipo': 'cambio', 'treno1': t1, 'treno2': t2,
                             'stazioneCAMBIO': snome, 'oraArrCambio': arr_ms,
@@ -176,44 +180,47 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                 num  = t.get('numeroTreno')
                 ts   = t.get('orarioPartenza')
                 dest = (t.get('destinazione') or '').upper()
-                if not num or not ts:
+                cod  = t.get('codOrigine')
+                if not num or not ts or not cod:
                     continue
                 print(f"[TRENO] {num} dest={dest}", flush=True)
 
+                # Leggi SEMPRE le fermate per avere l'orario reale di arrivo all'interscambio
                 sid, snome = _get_int(dest)
                 if sid and sid != from_id and sid != to_id:
-                    arr = t.get('orarioArrivo') or ts
-                    tutte.extend(_cerca_int(sid, snome, arr, t))
+                    # Prendi orario reale di arrivo alla stazione di cambio
+                    arr_reale, fermate = _get_arr_at_stop(cod, num, ts, snome)
+                    arr_ms = arr_reale or t.get('orarioArrivo') or ts
+                    print(f"[TRENO] {num} arrivo a {snome}: {arr_ms}", flush=True)
+                    tutte.extend(_cerca_int(sid, snome, arr_ms, t))
+                else:
+                    # Cerca nelle fermate altri interscambi
+                    fd = api(f'/andamentoTreno/{cod}/{num}/{ts}')
+                    fermate = fd.get('fermate', []) if fd and isinstance(fd, dict) else []
+                    fkw = [w for w in from_nome.split() if len(w) > 3]
+                    idx = 0
+                    for i, fm in enumerate(fermate):
+                        if any(k in (fm.get('stazione') or '').upper() for k in fkw):
+                            idx = i
+                            break
+                    seen_int = set()
+                    for fm in fermate[idx + 1:]:
+                        nf = (fm.get('stazione') or '').upper()
+                        si2, sn2 = _get_int(nf)
+                        if not si2 or si2 == from_id or si2 == to_id:
+                            continue
+                        if sn2 in seen_int:
+                            continue
+                        seen_int.add(sn2)
+                        am = fm.get('arrivo_teorico') or fm.get('programmata') or fm.get('partenza_teorica')
+                        if not am:
+                            continue
+                        tutte.extend(_cerca_int(si2, sn2, am, t))
+                        if len(tutte) >= 3:
+                            break
 
                 if len(tutte) >= 3:
                     break
-
-                cod = t.get('codOrigine')
-                if cod:
-                    fd = api(f'/andamentoTreno/{cod}/{num}/{ts}')
-                    if fd and isinstance(fd, dict):
-                        fermate = fd.get('fermate', [])
-                        fkw = [w for w in from_nome.split() if len(w) > 3]
-                        idx = 0
-                        for i, fm in enumerate(fermate):
-                            if any(k in (fm.get('stazione') or '').upper() for k in fkw):
-                                idx = i
-                                break
-                        seen_int = {snome} if snome else set()
-                        for fm in fermate[idx + 1:]:
-                            nf = (fm.get('stazione') or '').upper()
-                            si2, sn2 = _get_int(nf)
-                            if not si2 or si2 == from_id or si2 == to_id:
-                                continue
-                            if sn2 in seen_int:
-                                continue
-                            seen_int.add(sn2)
-                            am = fm.get('arrivo_teorico') or fm.get('programmata') or fm.get('partenza_teorica')
-                            if not am:
-                                continue
-                            tutte.extend(_cerca_int(si2, sn2, am, t))
-                            if len(tutte) >= 3:
-                                break
 
             seen_s = set()
             uniche = []
