@@ -1403,7 +1403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         continue
 
                     ok = _match_strict(dest2, to_nome)
-                    arr_d = t2.get('orarioArrivo')
+                    arr_d = None  # lo calcoliamo sempre dalle fermate
                     if not ok:
                         c2 = t2.get('codOrigine')
                         n2 = t2.get('numeroTreno')
@@ -1426,7 +1426,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                         ok = True
                                         break
                     if ok:
-                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} dest={dest2} alle {p2_dt}", flush=True)
+                        # Cerca sempre orario arrivo a destinazione nelle fermate dopo cambio
+                        if not arr_d:
+                            c2x = t2.get('codOrigine')
+                            n2x = t2.get('numeroTreno')
+                            if c2x and n2x:
+                                f2x = api(f'/andamentoTreno/{c2x}/{n2x}/{op2}')
+                                if f2x and isinstance(f2x, dict):
+                                    fermate2x = f2x.get('fermate', [])
+                                    idx_cx = -1
+                                    for i, fm in enumerate(fermate2x):
+                                        if _match_strict((fm.get('stazione') or '').upper(), snome):
+                                            idx_cx = i
+                                            break
+                                    for fm in fermate2x[idx_cx + 1:]:
+                                        if _match_strict((fm.get('stazione') or '').upper(), to_nome):
+                                            arr_d = fm.get('arrivo_teorico') or fm.get('programmata')
+                                            break
+                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} dest={dest2} arr={arr_d}", flush=True)
                         sols.append({
                             'tipo': 'cambio', 'treno1': t1, 'treno2': t2,
                             'stazioneCAMBIO': snome, 'oraArrCambio': arr_ms,
