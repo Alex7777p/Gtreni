@@ -1365,8 +1365,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 print(f"[INT] {snome} trovati {len(tb)} treni verso {to_nome}", flush=True)
                 for t2 in tb[:20]:
                     dest2 = (t2.get('destinazione') or '').upper()
-                    op2 = t2.get('orarioPartenza')
+                    op2 = (t2.get('orarioPartenza') or
+                           t2.get('millisDataPartenza') or
+                           t2.get('dataPartenzaTreno') or
+                           t2.get('orarioArrivo'))
                     if not op2:
+                        print(f"[SKIP] {t2.get('numeroTreno')} nessun orario", flush=True)
                         continue
                     try:
                         p2_dt = datetime.fromtimestamp(op2 / 1000)
