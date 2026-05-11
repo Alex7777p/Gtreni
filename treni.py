@@ -651,8 +651,8 @@ function htmlCambio(s, idx, toNome) {
       <div style="display:flex;align-items:stretch;gap:0;width:100%">
         <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
           <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
-          <div style="font-size:0.85rem;font-weight:600">${partStr} → ${arrCambio}</div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t1.destinazione||'–'}</div>
+          <div style="font-size:0.85rem;font-weight:600">${partStr}${arrCambio !== '–' ? ' → ' + arrCambio : ''}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${s.stazioneCAMBIO}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
           <div style="font-size:0.7rem;color:#a78bfa;font-weight:600">CAMBIO</div>
@@ -661,8 +661,8 @@ function htmlCambio(s, idx, toNome) {
         </div>
         <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:10px 14px;border:1px solid var(--border)">
           <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
-          <div style="font-size:0.85rem;font-weight:600">${partCambio} → ${arrStr}</div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${t2.destinazione||toNome}</div>
+          <div style="font-size:0.85rem;font-weight:600">${partCambio}${arrStr !== '–' ? ' → ' + arrStr : ''}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${toNome}</div>
         </div>
       </div>
       ${(t1.ritardo > 0 || t2.ritardo > 0) ? '<div style="font-size:0.75rem;color:#f87171">⚠️ Ritardi in corso</div>' : ''}
