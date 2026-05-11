@@ -649,20 +649,22 @@ function htmlCambio(s, idx, toNome) {
         ${durTot ? ('<span style="color:var(--accent);font-size:0.82rem">· ' + durTot + '</span>') : ''}
       </div>
       <div style="display:flex;align-items:stretch;gap:0;width:100%">
-        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:10px 14px;border:1px solid var(--border)">
-          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
-          <div style="font-size:0.85rem;font-weight:600">${partStr}${arrCambio !== '–' ? ' → ' + arrCambio : ''}</div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${s.stazioneCAMBIO}</div>
+        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:10px 0 0 10px;padding:12px 14px;border:1px solid var(--border)">
+          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px">${t1.categoriaDescrizione||t1.categoria||'REG'} ${t1.numeroTreno}</div>
+          <div style="font-size:1.05rem;font-weight:700;color:#ffffff">${partStr}</div>
+          ${arrCambio !== '–' ? '<div style="font-size:1.05rem;font-weight:700;color:#ffffff">→ ' + arrCambio + '</div>' : ''}
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">→ ${s.stazioneCAMBIO}</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
-          <div style="font-size:0.7rem;color:#a78bfa;font-weight:600">CAMBIO</div>
-          <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap;text-align:center">${s.stazioneCAMBIO.split(' ').slice(0,2).join(' ')}</div>
-          <div style="font-size:0.7rem;color:var(--muted)">${attesa} min</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);min-width:70px">
+          <div style="font-size:0.7rem;color:#a78bfa;font-weight:700">CAMBIO</div>
+          <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap;text-align:center;margin:2px 0">${s.stazioneCAMBIO.split(' ').slice(0,2).join(' ')}</div>
+          <div style="font-size:0.75rem;color:#a78bfa;font-weight:600">${attesa} min</div>
         </div>
-        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:10px 14px;border:1px solid var(--border)">
-          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
-          <div style="font-size:0.85rem;font-weight:600">${partCambio}${arrStr !== '–' ? ' → ' + arrStr : ''}</div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">→ ${toNome}</div>
+        <div style="flex:1;background:var(--card-2,#1e293b);border-radius:0 10px 10px 0;padding:12px 14px;border:1px solid var(--border)">
+          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px">${t2.categoriaDescrizione||t2.categoria||'REG'} ${t2.numeroTreno}</div>
+          <div style="font-size:1.05rem;font-weight:700;color:#ffffff">${partCambio}</div>
+          ${arrStr !== '–' ? '<div style="font-size:1.05rem;font-weight:700;color:#ffffff">→ ' + arrStr + '</div>' : ''}
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">→ ${toNome}</div>
         </div>
       </div>
       ${(t1.ritardo > 0 || t2.ritardo > 0) ? '<div style="font-size:0.75rem;color:#f87171">⚠️ Ritardi in corso</div>' : ''}
