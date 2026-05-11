@@ -1442,9 +1442,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 num = t.get('numeroTreno')
                 ts_ms = t.get('orarioPartenza')
                 dest = (t.get('destinazione') or '').upper()
+                print(f"[TRENO] {num} dest={dest}", flush=True)
                 if not num or not ts_ms:
                     return soluzioni
                 staz_id, staz_nome = get_id_interscambio(dest)
+                print(f"[TRENO] {num} interscambio={staz_nome} id={staz_id}", flush=True)
                 if staz_id and staz_id != from_id and staz_id != to_id:
                     arr_ms = t.get('orarioArrivo') or ts_ms
                     sols = cerca_da_interscambio(staz_id, staz_nome, arr_ms, t)
