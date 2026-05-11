@@ -1,13 +1,12 @@
 """
-Patch script - modifica il blocco /api/cambi in treni.py
-Esegui nella stessa cartella di treni.py
+Patch script v2 - fix filtro orario in _cerca_int
 """
-import os, sys
+import os, sys, ast
 
 FILENAME = 'treni.py'
 
 if not os.path.exists(FILENAME):
-    print(f"ERRORE: {FILENAME} non trovato nella cartella corrente!")
+    print(f"ERRORE: {FILENAME} non trovato!")
     sys.exit(1)
 
 with open(FILENAME, 'r', encoding='utf-8') as f:
@@ -85,25 +84,35 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                 except:
                     return sols
                 min_dt = arr_dt + timedelta(minutes=MARGINE_MIN)
-                orario2 = build_orario(min_dt.strftime('%H:%M'), min_dt.strftime('%Y-%m-%d'))
-                tb = api(f'/partenze/{sid}/{urllib.parse.quote(orario2)}')
-                if not tb or not isinstance(tb, list):
-                    return sols
-                print(f"[INT] {snome} trovati {len(tb)} treni, min_dt={min_dt}", flush=True)
-                for t2 in tb[:20]:
+
+                # Prova piu fasce orarie per trovare treni dopo min_dt
+                tb_all = []
+                seen_t = set()
+                for dh in [0, 1, 2, 3, 4]:
+                    dt_try = min_dt + timedelta(hours=dh)
+                    orario2 = build_orario(dt_try.strftime('%H:%M'), dt_try.strftime('%Y-%m-%d'))
+                    tb = api(f'/partenze/{sid}/{urllib.parse.quote(orario2)}')
+                    if tb and isinstance(tb, list):
+                        for tx in tb:
+                            k = tx.get('numeroTreno')
+                            if k and k not in seen_t:
+                                seen_t.add(k)
+                                tb_all.append(tx)
+
+                print(f"[INT] {snome} trovati {len(tb_all)} treni totali, min_dt={min_dt}", flush=True)
+
+                for t2 in tb_all:
                     dest2 = (t2.get('destinazione') or '').upper()
                     op2 = (t2.get('orarioPartenza') or
                            t2.get('millisDataPartenza') or
                            t2.get('dataPartenzaTreno'))
-                    print(f"[INT2] {t2.get('numeroTreno')} dest={dest2} op2={op2}", flush=True)
                     if not op2:
                         continue
                     try:
                         p2_dt = datetime.fromtimestamp(op2 / 1000)
-                    except Exception as e:
-                        print(f"[INT2] err timestamp {e}", flush=True)
+                    except:
                         continue
-                    print(f"[INT2] p2_dt={p2_dt} min_dt={min_dt} pass={p2_dt >= min_dt}", flush=True)
+                    # Filtra: deve partire dopo min_dt
                     if p2_dt < min_dt:
                         continue
                     ok = _match(dest2, to_kw, to_nome)
@@ -121,7 +130,7 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                                         ok = True
                                         break
                     if ok:
-                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')}", flush=True)
+                        print(f"[TROVATO] cambio a {snome} con {t2.get('numeroTreno')} alle {p2_dt}", flush=True)
                         sols.append({
                             'tipo': 'cambio', 'treno1': t1, 'treno2': t2,
                             'stazioneCAMBIO': snome, 'oraArrCambio': arr_ms,
@@ -154,7 +163,7 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
 
             # Cerca cambi in sequenza
             tutte = []
-            for t in treni_a[:10]:
+            for t in treni_a[:8]:
                 num  = t.get('numeroTreno')
                 ts   = t.get('orarioPartenza')
                 dest = (t.get('destinazione') or '').upper()
@@ -162,16 +171,14 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                     continue
                 print(f"[TRENO] {num} dest={dest}", flush=True)
 
-                # Strategia 1: usa destinazione come interscambio
                 sid, snome = _get_int(dest)
                 if sid and sid != from_id and sid != to_id:
                     arr = t.get('orarioArrivo') or ts
                     tutte.extend(_cerca_int(sid, snome, arr, t))
 
-                if len(tutte) >= 5:
+                if len(tutte) >= 3:
                     break
 
-                # Strategia 2: cerca nelle fermate
                 cod = t.get('codOrigine')
                 if cod:
                     fd = api(f'/andamentoTreno/{cod}/{num}/{ts}')
@@ -196,7 +203,7 @@ NEW_BLOCK = """        elif parsed.path == '/api/cambi':
                             if not am:
                                 continue
                             tutte.extend(_cerca_int(si2, sn2, am, t))
-                            if len(tutte) >= 5:
+                            if len(tutte) >= 3:
                                 break
 
             # Deduplicazione
@@ -221,18 +228,14 @@ print("Backup creato: treni.py.bak")
 # Applica patch
 new_content = content[:start] + NEW_BLOCK + content[end:]
 
-with open(FILENAME, 'w', encoding='utf-8') as f:
-    f.write(new_content)
-
-# Verifica
-import ast
 try:
     ast.parse(new_content)
+    with open(FILENAME, 'w', encoding='utf-8') as f:
+        f.write(new_content)
     print(f"OK! File modificato con successo.")
     print(f"Righe totali: {new_content.count(chr(10))}")
 except SyntaxError as e:
     print(f"ERRORE di sintassi: {e}")
-    # Ripristina backup
     with open(FILENAME, 'w', encoding='utf-8') as f:
         f.write(content)
     print("Backup ripristinato!")
