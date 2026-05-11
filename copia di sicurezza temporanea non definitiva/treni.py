@@ -1306,7 +1306,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             time_str = p('time') or datetime.now().strftime('%H:%M')
             from datetime import timedelta
             import concurrent.futures
-            MARGINE_MIN = 10  # minuti minimi per il cambio
+            MARGINE_MIN = 15  # minuti minimi per il cambio
             try:
                 base_dt = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
             except:
@@ -1347,31 +1347,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'COMO SAN GIOVANNI': 'S01901',
                 'ALESSANDRIA': 'S00501',
             }
-
             to_kw = [w for w in to_nome.split() if len(w) > 3]
 
-            def match_dest(dest, kws, nome_completo):
-                """Controlla se la destinazione corrisponde alla stazione cercata."""
-                dest = dest.upper()
-                if nome_completo in dest:
-                    return True
-                parole = dest.split()
-                return kws and all(k in parole for k in kws)
-
-            def get_id_interscambio(nome_dest):
-                """Dato il nome di una stazione, restituisce l'ID interscambio se è nella lista."""
-                nome_dest = nome_dest.upper()
-                for nome_int, id_int in INTERSCAMBI.items():
-                    # Match: almeno 2 parole significative in comune
-                    parole_int = [w for w in nome_int.split() if len(w) > 3]
-                    parole_dest = nome_dest.split()
-                    if parole_int and all(p in parole_dest for p in parole_int[:2]):
-                        return id_int, nome_int
-                    if nome_int in nome_dest or nome_dest in nome_int:
-                        return id_int, nome_int
-                return None, None
-
-            # Step 1: raccogli treni da stazione A su 2 fasce orarie
+            # Raccoglie treni da stazione A
             treni_a = []
             seen = set()
             for delta_h in [0, 2]:
@@ -1389,130 +1367,109 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 send_json(self, [])
                 return
 
-            def cerca_da_interscambio(staz_cambio_id, staz_cambio_nome, arr_cambio_ms, treno1):
-                """Cerca treni dall'interscambio verso la destinazione finale."""
+            # Per ogni treno, trova le fermate e cerca interscambi
+            def trova_cambi(t):
+                num = t.get('numeroTreno')
+                cod = t.get('codOrigine')
+                ts_ms = t.get('orarioPartenza')
+                if not num or not ts_ms or not cod:
+                    return []
+                ferro = api(f'/andamentoTreno/{cod}/{num}/{ts_ms}')
+                if not ferro or not isinstance(ferro, dict):
+                    return []
+                fermate = ferro.get('fermate', [])
+                if not fermate:
+                    return []
+
+                # Trova la stazione di partenza nel percorso
+                from_kw_l = [w for w in from_nome.split() if len(w) > 3]
+                idx_from = 0
+                for i, f in enumerate(fermate):
+                    nome = (f.get('stazione') or '').upper()
+                    if any(k in nome for k in from_kw_l):
+                        idx_from = i
+                        break
+
                 soluzioni = []
-                try:
-                    arr_cambio_dt = datetime.fromtimestamp(arr_cambio_ms / 1000)
-                except:
-                    return soluzioni
+                # Scansiona fermate dopo la partenza per trovare interscambi
+                for f in fermate[idx_from + 1:]:
+                    nome_f = (f.get('stazione') or '').upper()
+                    # Controlla se questa fermata è una stazione di interscambio
+                    staz_cambio_id = None
+                    staz_cambio_nome = None
+                    for nome_int, id_int in INTERSCAMBI.items():
+                        if any(part in nome_f for part in nome_int.split() if len(part) > 3):
+                            staz_cambio_id = id_int
+                            staz_cambio_nome = nome_int
+                            break
+                    if not staz_cambio_id:
+                        continue
+                    if staz_cambio_id == from_id:
+                        continue
 
-                min_part = arr_cambio_dt + timedelta(minutes=MARGINE_MIN)
-                orario_cambio = build_orario(min_part.strftime('%H:%M'), min_part.strftime('%Y-%m-%d'))
-                treni_b = api(f'/partenze/{staz_cambio_id}/{urllib.parse.quote(orario_cambio)}')
-                if not treni_b or not isinstance(treni_b, list):
-                    return soluzioni
-
-                for t2 in treni_b[:20]:
-                    dest2 = (t2.get('destinazione') or '').upper()
-                    orario_part2 = t2.get('orarioPartenza')
-                    if not orario_part2:
+                    # Orario arrivo al cambio
+                    arr_cambio_ms = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
+                    if not arr_cambio_ms:
                         continue
                     try:
-                        part2_dt = datetime.fromtimestamp(orario_part2 / 1000)
+                        arr_cambio_dt = datetime.fromtimestamp(arr_cambio_ms / 1000)
                     except:
                         continue
-                    if part2_dt < min_part:
+
+                    # Cerca treni da stazione di cambio verso destinazione
+                    min_part = arr_cambio_dt + timedelta(minutes=MARGINE_MIN)
+                    orario_cambio = build_orario(min_part.strftime('%H:%M'), min_part.strftime('%Y-%m-%d'))
+                    treni_b = api(f'/partenze/{staz_cambio_id}/{urllib.parse.quote(orario_cambio)}')
+                    if not treni_b or not isinstance(treni_b, list):
                         continue
 
-                    # Controlla se arriva alla destinazione (controllo veloce sulla destinazione finale)
-                    arriva_dest = match_dest(dest2, to_kw, to_nome)
-                    arr_dest_ms = t2.get('orarioArrivo')
+                    for t2 in treni_b[:15]:
+                        dest2 = (t2.get('destinazione') or '').upper()
+                        orario_part2 = t2.get('orarioPartenza')
+                        if not orario_part2:
+                            continue
+                        # Verifica che parta dopo il margine
+                        try:
+                            part2_dt = datetime.fromtimestamp(orario_part2 / 1000)
+                        except:
+                            continue
+                        if part2_dt < min_part:
+                            continue
 
-                    if not arriva_dest:
-                        # Controlla nelle fermate del secondo treno
-                        cod2 = t2.get('codOrigine')
-                        num2 = t2.get('numeroTreno')
-                        if cod2 and num2 and orario_part2:
-                            ferro2 = api(f'/andamentoTreno/{cod2}/{num2}/{orario_part2}')
-                            if ferro2 and isinstance(ferro2, dict):
-                                for f2 in ferro2.get('fermate', []):
-                                    nome2 = (f2.get('stazione') or '').upper()
-                                    if match_dest(nome2, to_kw, to_nome):
-                                        arr_dest_ms = f2.get('arrivo_teorico') or f2.get('programmata')
-                                        arriva_dest = True
-                                        break
-
-                    if arriva_dest:
-                        soluzioni.append({
-                            'tipo': 'cambio',
-                            'treno1': treno1,
-                            'treno2': t2,
-                            'stazioneCAMBIO': staz_cambio_nome,
-                            'oraArrCambio': arr_cambio_ms,
-                            'oraPartCambio': orario_part2,
-                            'attesaMin': int((part2_dt - arr_cambio_dt).total_seconds() / 60),
-                            'orarioPartenza': treno1.get('orarioPartenza'),
-                            'orarioArrivo': arr_dest_ms or t2.get('orarioArrivo'),
-                        })
-                        break  # una soluzione per interscambio è sufficiente
+                        # Controlla se arriva alla destinazione
+                        arriva_dest = any(k in dest2 for k in to_kw)
+                        if not arriva_dest:
+                            # Controlla nelle fermate del secondo treno
+                            cod2 = t2.get('codOrigine')
+                            num2 = t2.get('numeroTreno')
+                            if cod2 and num2 and orario_part2:
+                                ferro2 = api(f'/andamentoTreno/{cod2}/{num2}/{orario_part2}')
+                                if ferro2 and isinstance(ferro2, dict):
+                                    for f2 in ferro2.get('fermate', []):
+                                        nome2 = (f2.get('stazione') or '').upper()
+                                        if to_nome.upper() in nome2 or all(k in nome2.split() for k in to_kw):
+                                            t2['orarioArrivoDestinazione'] = f2.get('arrivo_teorico') or f2.get('programmata')
+                                            arriva_dest = True
+                                            break
+                        if arriva_dest:
+                            soluzioni.append({
+                                'tipo': 'cambio',
+                                'treno1': t,
+                                'treno2': t2,
+                                'stazioneCAMBIO': staz_cambio_nome,
+                                'oraArrCambio': arr_cambio_ms,
+                                'oraPartCambio': orario_part2,
+                                'attesaMin': int((part2_dt - arr_cambio_dt).total_seconds() / 60),
+                                'orarioPartenza': ts_ms,
+                                'orarioArrivo': t2.get('orarioArrivoDestinazione') or t2.get('orarioArrivo'),
+                            })
+                            break  # una soluzione per interscambio è sufficiente
                 return soluzioni
 
-            def trova_cambi(t):
-                """
-                Strategia principale:
-                1. Usa la DESTINAZIONE FINALE del treno come primo interscambio candidato
-                2. Se la destinazione non è nella lista, cerca nelle fermate
-                """
-                soluzioni = []
-                num = t.get('numeroTreno')
-                ts_ms = t.get('orarioPartenza')
-                dest = (t.get('destinazione') or '').upper()
-                if not num or not ts_ms:
-                    return soluzioni
-
-                # --- STRATEGIA 1: usa destinazione finale come interscambio ---
-                staz_id, staz_nome = get_id_interscambio(dest)
-                if staz_id and staz_id != from_id and staz_id != to_id:
-                    # Orario arrivo = orario arrivo del treno alla sua destinazione finale
-                    arr_ms = t.get('orarioArrivo') or ts_ms
-                    sols = cerca_da_interscambio(staz_id, staz_nome, arr_ms, t)
-                    soluzioni.extend(sols)
-
-                # --- STRATEGIA 2: cerca nelle fermate altri interscambi ---
-                # Utile quando la destinazione del treno non è un interscambio
-                # o quando vogliamo trovare soluzioni con cambio prima della destinazione
-                cod = t.get('codOrigine')
-                if cod:
-                    ferro = api(f'/andamentoTreno/{cod}/{num}/{ts_ms}')
-                    if ferro and isinstance(ferro, dict):
-                        fermate = ferro.get('fermate', [])
-                        # Trova indice stazione di partenza
-                        from_kw_l = [w for w in from_nome.split() if len(w) > 3]
-                        idx_from = 0
-                        for i, f in enumerate(fermate):
-                            nome = (f.get('stazione') or '').upper()
-                            if any(k in nome for k in from_kw_l):
-                                idx_from = i
-                                break
-
-                        interscambi_trovati = set()
-                        if staz_nome:
-                            interscambi_trovati.add(staz_nome)
-
-                        for f in fermate[idx_from + 1:]:
-                            nome_f = (f.get('stazione') or '').upper()
-                            sid, snome = get_id_interscambio(nome_f)
-                            if not sid or sid == from_id or sid == to_id:
-                                continue
-                            if snome in interscambi_trovati:
-                                continue
-                            interscambi_trovati.add(snome)
-
-                            arr_ms = f.get('arrivo_teorico') or f.get('programmata') or f.get('partenza_teorica')
-                            if not arr_ms:
-                                continue
-                            sols = cerca_da_interscambio(sid, snome, arr_ms, t)
-                            soluzioni.extend(sols)
-                            if len(soluzioni) >= 3:
-                                break
-
-                return soluzioni
-
-            # Esegui in parallelo
+            # Esegui in parallelo su max 8 treni
             tutte_soluzioni = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
-                futures = [ex.submit(trova_cambi, t) for t in treni_a[:10]]
+                futures = [ex.submit(trova_cambi, t) for t in treni_a[:8]]
                 for fut in concurrent.futures.as_completed(futures):
                     try:
                         sols = fut.result()

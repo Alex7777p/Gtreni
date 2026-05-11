@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.onrender.gtreni.twa",
+        "sha256_cert_fingerprints": ["3D:7D:B3:BB:70:25:85:1B:71:B3:96:2B:66:DA:04:A3:49:AD:7C:B1:78:B8:BF:C8:D1:F2:C9:7C:28:36:0D:E1"]
+      }
+    }]
